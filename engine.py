@@ -12,19 +12,18 @@ def prepare_engine():
     return cookie_file
 
 def get_all_formats(url):
-    # إضافة User-Agent لخداع اليوتيوب ومنع الـ Error
     ydl_opts = {
         'quiet': True, 
         'cookiefile': prepare_engine(), 
         'nocheckcertificate': True, 
         'no_warnings': True,
+        # إضافة متصفح وهمي لمنع الحظر
         'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
         formats_btns = {}
         for f in info.get('formats', []):
-            # نفس منطقك المستقر (فيديو وصوت معاً)
             if f.get('vcodec') != 'none' and f.get('acodec') != 'none' and f.get('ext') == 'mp4':
                 res = f.get('height')
                 if res: formats_btns[f"🎬 {res}p"] = f.get('format_id')
