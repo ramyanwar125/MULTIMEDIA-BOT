@@ -2,6 +2,6 @@ pyrogram
 tgcrypto
 yt-dlp
 flask
-pymongo
+pymongo[srv]
 dnspython
 certifi
