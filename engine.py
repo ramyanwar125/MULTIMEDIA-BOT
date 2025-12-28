@@ -3,6 +3,7 @@ import yt_dlp
 
 def prepare_engine():
     cookie_file = "cookies.txt"
+    # الكوكيز التي أرسلتها سابقاً مدمجة بشكل صحيح
     raw_cookies = [
         {"domain": ".youtube.com", "name": "__Secure-1PAPISID", "value": "5i84Die2RJBNC2ce/AT2hauHxI6F92xPj_"},
         {"domain": ".youtube.com", "name": "__Secure-1PSID", "value": "g.a0004giEiFc2xdrGVpg52KCe5iEggWIlfVJTzLdmIY_shjAgvHHZJC__lOksy_V1shnK_eMU2QACgYKAWISARYSFQHGX2MiSRiVPtw6IQMxGYvEmCdH4RoVAUF8yKozwvkHQM09piFqm1tD3qSe0076"},
@@ -24,7 +25,7 @@ def get_all_formats(url):
         'quiet': True,
         'cookiefile': cookie_path,
         'nocheckcertificate': True,
-        # الإعداد السحري: إجبار yt-dlp على استخدام مشغل الأندرويد فقط
+        # استخدام هوية تطبيق يوتيوب أندرويد الرسمي
         'extractor_args': {
             'youtube': {
                 'player_client': ['android'],
@@ -39,10 +40,12 @@ def get_all_formats(url):
             info = ydl.extract_info(url, download=False)
             formats_btns = {}
             for f in info.get('formats', []):
+                # نركز على جودات MP4 المباشرة
                 if f.get('vcodec') != 'none' and f.get('acodec') != 'none' and f.get('ext') == 'mp4':
                     res = f.get('height')
                     if res: formats_btns[f"🎬 {res}p"] = f.get('format_id')
             
+            # إذا لم تتوفر جودات MP4 مدمجة، نطلب أفضل جودة متاحة
             if not formats_btns:
                 formats_btns["🎬 Best Quality"] = "best"
                 
