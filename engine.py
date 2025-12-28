@@ -3,7 +3,6 @@ import yt_dlp
 
 def prepare_engine():
     cookie_file = "cookies.txt"
-    # الكوكيز التي أرسلتها بصيغة JSON تم تحويلها هنا لتنسيق Netscape
     raw_cookies = [
         {"domain": ".youtube.com", "name": "__Secure-1PAPISID", "value": "5i84Die2RJBNC2ce/AT2hauHxI6F92xPj_"},
         {"domain": ".youtube.com", "name": "__Secure-1PSID", "value": "g.a0004giEiFc2xdrGVpg52KCe5iEggWIlfVJTzLdmIY_shjAgvHHZJC__lOksy_V1shnK_eMU2QACgYKAWISARYSFQHGX2MiSRiVPtw6IQMxGYvEmCdH4RoVAUF8yKozwvkHQM09piFqm1tD3qSe0076"},
@@ -13,11 +12,9 @@ def prepare_engine():
         {"domain": ".youtube.com", "name": "LOGIN_INFO", "value": "AFmmF2swRQIhAJr_X_MAu1PKtQ7YbEoBme3ow5NsWSDax1gAtpwPVsLsAiA7viGmF4Tmg5dEWSZDbAGU_wD1X0KD0dyQCM_i8udTOg:QUQ3MjNmd1paTG9Rdm8tekRXSWxDb292WEQwZVBpbEVwYWNDUlNfVGppVUJxQ1JWYzNoMGRsbFY3cHU1MjRfX0Zwb1J3SmhwU2xrekF4Q3lQY19RTWFvZ01qeDFmVHVScS04WVFOV29nQk5TOTdpUWhTa1VPd3hQSDBENThBUjYwbUlYMUNuNlZQaGFMZVJEajJHU21OZklkV2tKS1FTTFJR"},
         {"domain": ".youtube.com", "name": "SID", "value": "g.a0004giEiFc2xdrGVpg52KCe5iEggWIlfVJTzLdmIY_shjAgvHHZ6A00lT4BcAvf860P256R8QACgYKASISARYSFQHGX2MigyhtRA6u3mymovOefruTiBoVAUF8yKqXLVcp081Qmaiv3aJ2gJvh0076"}
     ]
-    
     with open(cookie_file, "w", encoding="utf-8") as f:
         f.write("# Netscape HTTP Cookie File\n")
         for c in raw_cookies:
-            # كتابة السطور بتنسيق Netscape (Tab-separated)
             f.write(f"{c['domain']}\tTRUE\t/\tTRUE\t0\t{c['name']}\t{c['value']}\n")
     return cookie_file
 
@@ -27,13 +24,14 @@ def get_all_formats(url):
         'quiet': True,
         'cookiefile': cookie_path,
         'nocheckcertificate': True,
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        # الإعداد السحري: إجبار yt-dlp على استخدام مشغل الأندرويد فقط
         'extractor_args': {
             'youtube': {
-                'player_client': ['ios', 'android', 'web'],
+                'player_client': ['android'],
                 'player_skip': ['webpage', 'configs'],
             }
-        }
+        },
+        'user_agent': 'com.google.android.youtube/19.29.37 (Linux; U; Android 11) gzip',
     }
     
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -45,9 +43,12 @@ def get_all_formats(url):
                     res = f.get('height')
                     if res: formats_btns[f"🎬 {res}p"] = f.get('format_id')
             
+            if not formats_btns:
+                formats_btns["🎬 Best Quality"] = "best"
+                
             formats_btns["🎶 Audio | تحميل صوت"] = "bestaudio[ext=m4a]/bestaudio"
             return formats_btns
-        except Exception:
+        except:
             return {}
 
 def run_download(url, format_id, file_path):
@@ -57,6 +58,7 @@ def run_download(url, format_id, file_path):
         'cookiefile': "cookies.txt",
         'nocheckcertificate': True,
         'quiet': True,
+        'extractor_args': {'youtube': {'player_client': ['android']}}
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
