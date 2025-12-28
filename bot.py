@@ -1,22 +1,23 @@
 import os, asyncio, time
 from pyrogram import Client, filters
 from pyrogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
-from pyrogram.errors import UserNotParticipant
+from pyrogram.errors import UserNotParticipant, FloodWait
 from engine import get_all_formats, run_download
 from flask import Flask
 from threading import Thread
 from waitress import serve
 
-# --- Render Fix (الخادم الوهمي لمنع التوقف) ---
+# --- نظام الحماية من توقف ريندر (Render Fix) ---
 server = Flask('')
 @server.route('/')
-def home(): return "BOT IS ONLINE"
+def home(): return "SERVICE_PROVIDER_ONLINE"
 
 def run_server():
+    # ريندر يطلب فتح منفذ (Port) وهذا الكود يقوم بذلك تلقائياً
     port = int(os.environ.get("PORT", 8080))
     serve(server, host='0.0.0.0', port=port)
 
-# --- Config | الإعدادات ---
+# --- الإعدادات الأساسية ---
 API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
 BOT_TOKEN = "8320774023:AAFiFH3DMFZVI-njS3i-h50q4WmNwGpdpeg"
@@ -26,8 +27,8 @@ BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
 CHANNEL_USER = "Fast_Mediia" 
 USERS_FILE = "users_database.txt" 
 
-# تغيير اسم الجلسة لـ v22 لضمان قطع أي اتصال قديم ومنع التكرار
-app = Client("fast_media_v22", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+# تغيير اسم الجلسة يحل مشكلة التكرار فوراً
+app = Client("fast_media_v25", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
 def add_user(user_id):
@@ -58,7 +59,7 @@ async def check_subscription(client, message):
 
 async def progress_bar(current, total, status_msg, start_time):
     now = time.time()
-    if now - start_time < 2.5: return
+    if now - start_time < 3.0: return # تحديث كل 3 ثواني لتجنب حظر تليجرام
     percentage = current * 100 / total
     speed = current / (now - start_time)
     bar = "▬" * int(percentage // 10) + "▭" * (10 - int(percentage // 10))
@@ -74,10 +75,10 @@ async def start(client, message):
     if message.from_user.id == ADMIN_ID: kb[1].append('📣 Broadcast | إذاعة')
     await message.reply(f"✨ **Welcome to {BOT_NAME}**\n\nأرسل الرابط الآن للتحميل!", reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True))
 
-@app.on_message(filters.text & filters.private & ~filters.bot) # تم إضافة فلتر منع البوتات لمنع التكرار
+@app.on_message(filters.text & filters.private & ~filters.bot)
 async def handle_text(client, message):
-    # تجاهل الرسائل القديمة جداً لمنع التكرار عند إعادة التشغيل
-    if time.time() - message.date.timestamp() > 60: return
+    # فلتر منع معالجة الرسائل القديمة (يمنع التكرار عند إعادة التشغيل)
+    if time.time() - message.date.timestamp() > 50: return
 
     if not await check_subscription(client, message): return
     text, user_id = message.text, message.from_user.id
@@ -113,7 +114,7 @@ async def handle_text(client, message):
             user_cache[user_id] = text
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
             await status.edit("✅ **Choose Quality:**", reply_markup=InlineKeyboardMarkup(btns))
-        except: await status.edit("❌ **Link Error or Restricted.**")
+        except: await status.edit("❌ **Link Error or Protected Content.**")
 
 @app.on_callback_query()
 async def download_cb(client, callback_query):
@@ -136,5 +137,10 @@ async def download_cb(client, callback_query):
         if os.path.exists(file_path): os.remove(file_path)
 
 if __name__ == "__main__":
-    Thread(target=run_server, daemon=True).start() # تشغيل خادم ريندر في الخلفية
-    app.run()
+    Thread(target=run_server, daemon=True).start()
+    try:
+        app.run()
+    except FloodWait as e:
+        print(f"⚠️ FloodWait: Waiting {e.value} seconds...")
+        time.sleep(e.value)
+        app.run()
