@@ -1,18 +1,15 @@
 import yt_dlp
 import os
 
-# دالة لتحويل الكوكيز من JSON إلى تنسيق Netscape المطلوب
+# دالة إنشاء ملف الكوكيز بالتنسيق الذي يطلبه يوتيوب (Netscape)
 def get_cookies_path():
     cookie_file = "youtube_cookies.txt"
-    # البيانات التي أرسلتها أنت بتنسيق Netscape
-    # Domain, Include subdomains, Path, Secure, Expiry, Name, Value
     lines = [
         "# Netscape HTTP Cookie File\n",
         ".youtube.com\tTRUE\t/\tTRUE\t1766757959\tGPS\t1\n",
         ".youtube.com\tTRUE\t/\tTRUE\t1801316163\tPREF\ttz=Africa.Cairo&f7=100\n",
         ".youtube.com\tTRUE\t/\tTRUE\t1800424038\tSOCS\tCAISEwgDEgk4NDYxMjU0NDcaAmVuIAEaBgiA8ZzKBg\n"
     ]
-    
     with open(cookie_file, "w", encoding="utf-8") as f:
         f.writelines(lines)
     return cookie_file
@@ -48,14 +45,12 @@ def get_all_formats(url):
                             formats_dict[res] = f['format_id']
                             
         except Exception as e:
-            print(f"Error extracting formats: {e}")
             raise e
     
     return dict(sorted(formats_dict.items(), key=lambda x: x[0], reverse=True))
 
 def run_download(url, format_id, output_path):
     cookie_path = get_cookies_path()
-    
     ydl_opts = {
         'format': f'{format_id}+bestaudio/best',
         'outtmpl': output_path,
@@ -66,12 +61,11 @@ def run_download(url, format_id, output_path):
     }
     
     # إذا كان التحميل صوتاً فقط
-    if "audio" in format_id.lower() or "Audio" in format_id:
+    if "audio" in format_id.lower():
         ydl_opts['format'] = format_id
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         try:
             ydl.download([url])
         except Exception as e:
-            print(f"Error during download: {e}")
             raise e
