@@ -12,6 +12,7 @@ server = Flask('')
 def home(): return "<h1>Bot is Online!</h1>"
 
 def run_web():
+    # ريندر يطلب الاستماع للمنفذ المخصص تلقائياً
     port = int(os.environ.get('PORT', 8080))
     server.run(host='0.0.0.0', port=port)
 
@@ -25,8 +26,8 @@ BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
 CHANNEL_USER = "Fast_Mediia"
 
 # --- نظام قاعدة البيانات (MongoDB) ---
-# ملاحظة: استبدل كلمة 'PASSWORD' بكلمة السر الحقيقية الخاصة بك
-MONGO_URL = "mongodb+srv://ramyanwar880_db_user:PASSWORD@cluster0.nezvqdf.mongodb.net/?appName=Cluster0" 
+# تم دمج الباسورد الخاص بك هنا بنجاح
+MONGO_URL = "mongodb+srv://ramyanwar880_db_user:ns8O3Y2eCr7aLdxw@cluster0.nezvqdf.mongodb.net/?appName=Cluster0" 
 db_client = MongoClient(MONGO_URL)
 db = db_client["fast_media_bot"]
 users_col = db["users"]
@@ -52,7 +53,7 @@ async def check_subscription(client, message):
             f"قناة البوت: @{CHANNEL_USER}\n"
             f"بعد الاشتراك، أرسل /start مجدداً.",
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("✅ Join Channel", url=f"https://t.me/{CHANNEL_USER}")
+                InlineKeyboardButton("✅ Join Channel | اشترك الآن", url=f"https://t.me/{CHANNEL_USER}")
             ]])
         )
         return False
@@ -70,14 +71,19 @@ async def progress_bar(current, total, status_msg, start_time):
     try: await status_msg.edit(tmp)
     except: pass
 
-# --- الأوامر ---
+# --- الأوامر الرئيسية ---
 @app.on_message(filters.command("start") & filters.private)
 async def start(client, message):
     if not await check_subscription(client, message): return
     add_user(message.from_user.id)
     kb = [['🔄 Restart Service | بدء الخدمة'], ['👨‍💻 Developer | المطور']]
     if message.from_user.id == ADMIN_ID: kb[1].append('📣 Broadcast | إذاعة')
-    await message.reply(f"✨ Welcome **{message.from_user.first_name}** to **{BOT_NAME}**\n\nSend link now! 👇", reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True))
+    
+    welcome_text = (
+        f"✨ Welcome **{message.from_user.first_name}** to **{BOT_NAME}**\n\n"
+        f"👇 **Send link now! | أرسل الرابط الآن!**"
+    )
+    await message.reply(welcome_text, reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True))
 
 @app.on_message(filters.text & filters.private)
 async def handle_text(client, message):
@@ -86,12 +92,13 @@ async def handle_text(client, message):
     
     if text == '👨‍💻 Developer | المطور':
         msg = f"👑 **Main Developer:** {DEV_USER}"
-        if user_id == ADMIN_ID: msg += f"\n📊 **Total Users:** `{get_users_count()}`"
+        if user_id == ADMIN_ID:
+            msg += f"\n📊 **Total Users:** `{get_users_count()}`"
         await message.reply(msg)
         return
 
     if text == '📣 Broadcast | إذاعة' and user_id == ADMIN_ID:
-        await message.reply("📥 **Send your message:**")
+        await message.reply("📥 **Send your message | أرسل رسالة الإذاعة:**")
         user_cache[f"bc_{user_id}"] = True
         return
 
@@ -108,21 +115,22 @@ async def handle_text(client, message):
         return
 
     if "http" in text:
-        status = await message.reply("🔍 **Analyzing..**")
+        status = await message.reply("🔍 **Analyzing.. جاري المعالجة**")
         try:
             formats = await asyncio.to_thread(get_all_formats, text)
             user_cache[user_id] = text
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
-            await status.edit("✅ **Choose Quality:**", reply_markup=InlineKeyboardMarkup(btns))
-        except: await status.edit("❌ **Unsupported URL or Error!**")
+            await status.edit("✅ **Formats Found | اختر الجودة:**", reply_markup=InlineKeyboardMarkup(btns))
+        except: await status.edit("❌ **Error | فشل في جلب الروابط**")
 
 @app.on_callback_query()
 async def download_cb(client, callback_query):
     f_id, user_id = callback_query.data, callback_query.from_user.id
     url = user_cache.get(user_id)
-    if not url: return await callback_query.answer("⚠️ Session Expired", show_alert=True)
+    if not url:
+        return await callback_query.answer("⚠️ Session Expired", show_alert=True)
     
-    status = await callback_query.message.edit("⚙️ **Processing...**")
+    status = await callback_query.message.edit("⚙️ **Processing.. جاري التحميل**")
     is_audio = "audio" in f_id
     file_path = f"media_{user_id}.{'m4a' if is_audio else 'mp4'}"
     
@@ -130,13 +138,18 @@ async def download_cb(client, callback_query):
         await asyncio.to_thread(run_download, url, f_id, file_path)
         if os.path.exists(file_path):
             st = time.time()
-            if is_audio: await client.send_audio(user_id, file_path, caption=f"🎵 By {BOT_NAME}", progress=progress_bar, progress_args=(status, st))
-            else: await client.send_video(user_id, file_path, caption=f"🎬 By {BOT_NAME}", progress=progress_bar, progress_args=(status, st))
+            if is_audio: 
+                await client.send_audio(user_id, file_path, caption=f"🎵 **By {BOT_NAME}**", progress=progress_bar, progress_args=(status, st))
+            else: 
+                await client.send_video(user_id, file_path, caption=f"🎬 **By {BOT_NAME}**", progress=progress_bar, progress_args=(status, st))
             await status.delete()
-    except Exception as e: await status.edit(f"❌ Error: {e}")
+    except Exception as e: 
+        await status.edit(f"❌ **Failed:** {e}")
     finally: 
         if os.path.exists(file_path): os.remove(file_path)
 
 if __name__ == "__main__":
+    # تشغيل سيرفر الويب والبوت معاً
     threading.Thread(target=run_web, daemon=True).start()
+    print("🚀 Bot is running and connected to MongoDB...")
     app.run()
