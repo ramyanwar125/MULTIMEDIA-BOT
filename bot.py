@@ -3,8 +3,9 @@ from pyrogram import Client, filters
 from pyrogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import UserNotParticipant
 from engine import get_all_formats, run_download
-from flask import Flask # إضافة للتشغيل على ريندر
-from pymongo import MongoClient # إضافة لحفظ المستخدمين
+from flask import Flask
+from pymongo import MongoClient
+import certifi # مكتبة لحل مشكلة الـ SSL handshake failed
 
 # --- Flask Server لضمان عمل ريندر ---
 server = Flask('')
@@ -22,16 +23,17 @@ DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
 CHANNEL_USER = "Fast_Mediia" 
 
-# --- اتصال MongoDB (للحفاظ على مستخدمينك من الحذف) ---
+# --- اتصال MongoDB (مع حل مشكلة الـ SSL) ---
+# أضفنا tlsCAFile=certifi.where() لحل الخطأ الذي ظهر لك
 MONGO_URL = "mongodb+srv://ramyanwar880_db_user:ns8O3Y2eCr7aLdxw@cluster0.nezvqdf.mongodb.net/?appName=Cluster0" 
-db_client = MongoClient(MONGO_URL)
+db_client = MongoClient(MONGO_URL, tlsCAFile=certifi.where())
 db = db_client["fast_media_bot"]
 users_col = db["users"]
 
 app = Client("fast_media_v19", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
-# دالة حفظ المستخدمين (تعديل لتعمل مع المونجو بدلاً من الملف النصي)
+# دالة حفظ المستخدمين
 def add_user(user_id):
     if not users_col.find_one({"user_id": user_id}):
         users_col.insert_one({"user_id": user_id})
@@ -109,10 +111,8 @@ async def handle_text(client, message):
             f"👑 **Main Developer:** {DEV_USER}\n"
             f"📢 **Our Channel:** @{CHANNEL_USER}\n"
         )
-        # إظهار العدد للمطور فقط
         if user_id == ADMIN_ID:
             msg += f"📊 **Total Users:** `{get_users_count()}`"
-        
         await message.reply(msg)
         return
 
