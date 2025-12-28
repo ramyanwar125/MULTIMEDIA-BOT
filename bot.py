@@ -3,6 +3,24 @@ from pyrogram import Client, filters
 from pyrogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import UserNotParticipant
 from engine import get_all_formats, run_download
+from flask import Flask
+from threading import Thread
+
+# --- Render Port Binding Solution ---
+# خادم وهمي لإرضاء منصة ريندر ومنع توقف البوت
+server = Flask('')
+
+@server.route('/')
+def home():
+    return "✅ FAST MEDIA BOT IS ALIVE!"
+
+def run_server():
+    port = int(os.environ.get("PORT", 8080))
+    server.run(host='0.0.0.0', port=port)
+
+def keep_alive():
+    t = Thread(target=run_server)
+    t.start()
 
 # --- Config | الإعدادات ---
 API_ID = 33536164
@@ -11,25 +29,22 @@ BOT_TOKEN = "8320774023:AAFiFH3DMFZVI-njS3i-h50q4WmNwGpdpeg"
 ADMIN_ID = 7349033289 
 DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
-CHANNEL_USER = "Fast_Mediia" # يوزر القناة بدون @
+CHANNEL_USER = "Fast_Mediia" 
 USERS_FILE = "users_database.txt" 
 
-app = Client("fast_media_v19", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("fast_media_v20", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
-# دالة حفظ المستخدمين
 def add_user(user_id):
     if not os.path.exists(USERS_FILE): open(USERS_FILE, "w").close()
     users = open(USERS_FILE, "r").read().splitlines()
     if str(user_id) not in users:
         with open(USERS_FILE, "a") as f: f.write(f"{user_id}\n")
 
-# دالة جلب عدد المستخدمين
 def get_users_count():
     if not os.path.exists(USERS_FILE): return 0
     return len(open(USERS_FILE, "r").read().splitlines())
 
-# دالة التحقق من الاشتراك
 async def check_subscription(client, message):
     try:
         await client.get_chat_member(CHANNEL_USER, message.from_user.id)
@@ -46,7 +61,6 @@ async def check_subscription(client, message):
         return False
     except Exception: return True
 
-# شريط التقدم
 async def progress_bar(current, total, status_msg, start_time):
     now = time.time()
     diff = now - start_time
@@ -74,10 +88,10 @@ async def start(client, message):
     
     welcome_text = (
         f"✨━━━━━━━━━━━━━✨\n"
-        f"  🙋‍♂️ Welcome | أهلاً بك يا **{message.from_user.first_name}**\n"
+        f"  🙋‍♂️ Welcome | **{message.from_user.first_name}**\n"
         f"  🌟 In **{BOT_NAME}** World\n"
         f"✨━━━━━━━━━━━━━✨\n\n"
-        f"🚀 **Fast Downloader for | بوت تحميل سريع:**\n"
+        f"🚀 **Fast Downloader for:**\n"
         f"📹 YouTube | 📸 Instagram | 🎵 TikTok\n"
         f"👻 Snapchat | 🔵 Facebook\n\n"
         f"👇 **Send link now! | أرسل الرابط الآن!**"
@@ -94,14 +108,8 @@ async def handle_text(client, message):
         return
     
     if text == '👨‍💻 Developer | المطور':
-        msg = (
-            f"👑 **Main Developer:** {DEV_USER}\n"
-            f"📢 **Our Channel:** @{CHANNEL_USER}\n"
-        )
-        # إظهار العدد للمطور فقط
-        if user_id == ADMIN_ID:
-            msg += f"📊 **Total Users:** `{get_users_count()}`"
-        
+        msg = f"👑 **Main Developer:** {DEV_USER}\n📢 **Our Channel:** @{CHANNEL_USER}\n"
+        if user_id == ADMIN_ID: msg += f"📊 **Total Users:** `{get_users_count()}`"
         await message.reply(msg)
         return
 
@@ -115,7 +123,7 @@ async def handle_text(client, message):
         for u in users:
             try: await message.copy(int(u))
             except: pass
-        await message.reply("✅ **Broadcast Sent | تمت الإذاعة**")
+        await message.reply(f"✅ **Broadcast Sent to {len(users)} users**")
         user_cache[f"bc_{user_id}"] = False
         return
 
@@ -125,7 +133,7 @@ async def handle_text(client, message):
             formats = await asyncio.to_thread(get_all_formats, text)
             user_cache[user_id] = text
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
-            await status.edit("✅ **Formats Found | تم الاستخراج**\nChoose your option: 👇", reply_markup=InlineKeyboardMarkup(btns))
+            await status.edit("✅ **Formats Found | تم استخراج الجودات**\nChoose your option: 👇", reply_markup=InlineKeyboardMarkup(btns))
         except: await status.edit("❌ **Error | فشل المعالجة**")
 
 @app.on_callback_query()
@@ -152,4 +160,5 @@ async def download_cb(client, callback_query):
         if os.path.exists(file_path): os.remove(file_path)
 
 if __name__ == "__main__":
-    app.run()
+    keep_alive() # بدء الخادم الوهمي لمنع توقف ريندر
+    app.run()    # تشغيل البوت
