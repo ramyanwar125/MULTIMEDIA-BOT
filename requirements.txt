@@ -4,3 +4,4 @@ yt-dlp
 flask
 pymongo
 dnspython
+certifi
