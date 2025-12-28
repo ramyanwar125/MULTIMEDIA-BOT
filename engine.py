@@ -1,70 +1,45 @@
-import yt_dlp
 import os
+import yt_dlp
 
 def prepare_engine():
-    # يبحث عن ملف الكوكيز في حال قمت برفعه يدوياً
-    if os.path.exists("cookies_stable.txt"):
-        return "cookies_stable.txt"
-    return None
+    cookie_file = "cookies_stable.txt"
+    if not os.path.exists(cookie_file):
+        with open(cookie_file, "w") as f:
+            f.write("# Netscape HTTP Cookie File\n")
+            f.write(".youtube.com\tTRUE\t/\tTRUE\t1766757959\tGPS\t1\n")
+            f.write(".youtube.com\tTRUE\t/\tTRUE\t1801316163\tPREF\ttz=Africa.Cairo&f7=100\n")
+            f.write(".youtube.com\tTRUE\t/\tTRUE\t1800424038\tSOCS\tCAISEwgDEgk4NDYxMjU0NDcaAmVuIAEaBgiA8ZzKBg\n")
+    return cookie_file
 
 def get_all_formats(url):
-    cookie_path = prepare_engine()
-    
+    # إضافة User-Agent لخداع اليوتيوب ومنع الـ Error
     ydl_opts = {
-        'quiet': True,
+        'quiet': True, 
+        'cookiefile': prepare_engine(), 
+        'nocheckcertificate': True, 
         'no_warnings': True,
-        'cookiefile': cookie_path,
-        # هذه الإعدادات هي السر في تجاوز حظر يوتيوب الجديد
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Connection': 'keep-alive',
-        },
-        'nocheckcertificate': True,
-        'geo_bypass': True,
-        'extract_flat': False, # لمحاولة استخراج البيانات كاملة
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
-    
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        try:
-            info = ydl.extract_info(url, download=False)
-            if not info:
-                raise Exception("No info found")
-            
-            formats = {}
-            # استخراج جودات الفيديو المباشرة (Direct Links)
-            for f in info.get('formats', []):
-                # نفلتر الجودات التي تحتوي على فيديو وصوت معاً لسهولة الرفع
-                if f.get('vcodec') != 'none' and f.get('acodec') != 'none':
-                    res = f.get('resolution', f.get('format_note', 'HD'))
-                    # نأخذ الصيغ المشهورة فقط mp4
-                    if f.get('ext') == 'mp4':
-                        formats[f"{res} (MP4)"] = f['format_id']
-            
-            # إضافة خيار الصوت دائماً
-            formats["🎵 Audio (High Quality)"] = "bestaudio/best"
-            
-            # إذا لم يجد جودات محددة، نستخدم الخيار التلقائي
-            if not formats:
-                formats["🎬 Best Quality (Auto)"] = "best"
-                
-            return formats
-        except Exception as e:
-            print(f"Error in engine: {str(e)}")
-            raise e
+        info = ydl.extract_info(url, download=False)
+        formats_btns = {}
+        for f in info.get('formats', []):
+            # نفس منطقك المستقر (فيديو وصوت معاً)
+            if f.get('vcodec') != 'none' and f.get('acodec') != 'none' and f.get('ext') == 'mp4':
+                res = f.get('height')
+                if res: formats_btns[f"🎬 {res}p"] = f.get('format_id')
+        
+        formats_btns["🎶 Audio | تحميل صوت"] = "bestaudio[ext=m4a]/bestaudio"
+        return formats_btns
 
-def run_download(url, format_id, output_path):
-    cookie_path = prepare_engine()
+def run_download(url, format_id, file_path):
     ydl_opts = {
+        'outtmpl': file_path,
         'format': format_id,
-        'outtmpl': output_path,
-        'cookiefile': cookie_path,
+        'cookiefile': 'cookies_stable.txt',
         'nocheckcertificate': True,
-        'postprocessors': [{
-            'key': 'FFmpegVideoConvertor',
-            'preferedformat': 'mp4',
-        }] if "audio" not in format_id else [],
+        'quiet': True,
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
