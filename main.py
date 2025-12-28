@@ -2,16 +2,13 @@ import os, asyncio, time, threading
 from pyrogram import Client, filters
 from pyrogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import UserNotParticipant
-from flask import Flask 
-# تأكد أن اسم الملف بجانب هذا الملف هو engine.py بالضبط
+from flask import Flask # أضف flask لملف requirements.txt
 from engine import get_all_formats, run_download
 
-# --- خادم وهمي لإرضاء Render (حل مشكلة Port Binding) ---
+# --- خادم ويب وهمي لإبقاء البوت حياً على Render ---
 web_app = Flask(__name__)
-
 @web_app.route('/')
-def home():
-    return "Bot is Running!"
+def home(): return "Bot is Running"
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
@@ -30,7 +27,6 @@ USERS_FILE = "users_database.txt"
 app = Client("fast_media_v19", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
-# --- الدوال المساعدة ---
 def add_user(user_id):
     if not os.path.exists(USERS_FILE): open(USERS_FILE, "w").close()
     users = open(USERS_FILE, "r").read().splitlines()
@@ -75,17 +71,12 @@ async def progress_bar(current, total, status_msg, start_time):
     try: await status_msg.edit(tmp)
     except: pass
 
-# --- المعالجات (Handlers) ---
-
 @app.on_message(filters.command("start") & filters.private)
 async def start(client, message):
     if not await check_subscription(client, message): return
     add_user(message.from_user.id)
-    
-    # رسالة الترحيب الأصلية
     kb = [['🔄 Restart Service | بدء الخدمة'], ['👨‍💻 Developer | المطور']]
-    if message.from_user.id == ADMIN_ID: 
-        kb.append(['📣 Broadcast | إذاعة']) # تعديل بسيط لترتيب الأزرار
+    if message.from_user.id == ADMIN_ID: kb[1].append('📣 Broadcast | إذاعة')
     
     welcome_text = (
         f"✨━━━━━━━━━━━━━✨\n"
@@ -110,8 +101,7 @@ async def handle_text(client, message):
     
     if text == '👨‍💻 Developer | المطور':
         msg = f"👑 **Main Developer:** {DEV_USER}\n📢 **Our Channel:** @{CHANNEL_USER}\n"
-        if user_id == ADMIN_ID:
-            msg += f"📊 **Total Users:** `{get_users_count()}`"
+        if user_id == ADMIN_ID: msg += f"📊 **Total Users:** `{get_users_count()}`"
         await message.reply(msg)
         return
 
@@ -132,13 +122,11 @@ async def handle_text(client, message):
     if "http" in text:
         status = await message.reply("🔍 **Analyzing.. جاري المعالجة** ⏳")
         try:
-            # استدعاء الدالة من ملف engine.py
             formats = await asyncio.to_thread(get_all_formats, text)
             user_cache[user_id] = text
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
             await status.edit("✅ **Formats Found | تم الاستخراج**\nChoose your option: 👇", reply_markup=InlineKeyboardMarkup(btns))
-        except Exception as e: 
-            await status.edit(f"❌ **Error | فشل المعالجة**\n\nتأكد من تحديث الكوكيز في ملف engine.py")
+        except: await status.edit("❌ **Error | فشل المعالجة (تأكد من الرابط أو الكوكيز)**")
 
 @app.on_callback_query()
 async def download_cb(client, callback_query):
@@ -152,7 +140,6 @@ async def download_cb(client, callback_query):
     file_path = f"media_{user_id}.{'m4a' if is_audio else 'mp4'}"
     
     try:
-        # استدعاء دالة التحميل من ملف engine.py
         await asyncio.to_thread(run_download, url, f_id, file_path)
         if os.path.exists(file_path):
             st = time.time()
@@ -165,7 +152,6 @@ async def download_cb(client, callback_query):
         if os.path.exists(file_path): os.remove(file_path)
 
 if __name__ == "__main__":
-    # تشغيل الخادم الوهمي لإرضاء Render في الخلفية
+    # تشغيل الخادم في الخلفية لـ Render
     threading.Thread(target=run_web_server, daemon=True).start()
-    # تشغيل البوت
     app.run()
