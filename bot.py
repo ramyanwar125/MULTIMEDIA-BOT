@@ -5,24 +5,27 @@ from pyrogram.errors import UserNotParticipant
 from engine import get_all_formats, run_download
 from flask import Flask
 from threading import Thread
+from waitress import serve
 
-# --- Render Port Binding Solution ---
-# خادم وهمي لإرضاء منصة ريندر ومنع توقف البوت
+# --- Render Web Server (الخادم الاحترافي) ---
 server = Flask('')
 
 @server.route('/')
 def home():
-    return "✅ FAST MEDIA BOT IS ALIVE!"
+    return "✅ FAST MEDIA BOT IS ALIVE AND RUNNING!"
 
 def run_server():
+    # Render يرسل البورت تلقائياً عبر متغيرات البيئة
     port = int(os.environ.get("PORT", 8080))
-    server.run(host='0.0.0.0', port=port)
+    # استخدام serve (waitress) بدلاً من Flask العادي لمنع تحذيرات الإنتاج
+    serve(server, host='0.0.0.0', port=port)
 
 def keep_alive():
     t = Thread(target=run_server)
+    t.daemon = True # لضمان إغلاق الخادم عند إغلاق البوت
     t.start()
 
-# --- Config | الإعدادات ---
+# --- Configuration | الإعدادات ---
 API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
 BOT_TOKEN = "8320774023:AAFiFH3DMFZVI-njS3i-h50q4WmNwGpdpeg"
@@ -32,18 +35,21 @@ BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
 CHANNEL_USER = "Fast_Mediia" 
 USERS_FILE = "users_database.txt" 
 
-app = Client("fast_media_v20", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("fast_media_v21", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
+# --- Helper Functions | وظائف مساعدة ---
 def add_user(user_id):
     if not os.path.exists(USERS_FILE): open(USERS_FILE, "w").close()
-    users = open(USERS_FILE, "r").read().splitlines()
+    with open(USERS_FILE, "r") as f:
+        users = f.read().splitlines()
     if str(user_id) not in users:
         with open(USERS_FILE, "a") as f: f.write(f"{user_id}\n")
 
 def get_users_count():
     if not os.path.exists(USERS_FILE): return 0
-    return len(open(USERS_FILE, "r").read().splitlines())
+    with open(USERS_FILE, "r") as f:
+        return len(f.read().splitlines())
 
 async def check_subscription(client, message):
     try:
@@ -64,7 +70,7 @@ async def check_subscription(client, message):
 async def progress_bar(current, total, status_msg, start_time):
     now = time.time()
     diff = now - start_time
-    if diff < 2.5: return
+    if diff < 3.0: return # تحديث كل 3 ثوانٍ لمنع الحظر
     percentage = current * 100 / total
     speed = current / diff
     bar = "▬" * int(percentage // 10) + "▭" * (10 - int(percentage // 10))
@@ -73,11 +79,12 @@ async def progress_bar(current, total, status_msg, start_time):
         f"━━━━━━━━━━━━━━━━━━\n\n"
         f"◈ **Progress:** `{bar}` **{percentage:.1f}%**\n"
         f"◈ **Speed:** `{speed/(1024*1024):.2f} MB/s` ⚡️\n"
-        f"◈ **Size:** `{current/(1024*1024):.1f}` / `{total/(1024*1024):.1f} MB`\n\n"
-        f"━━━━━━━━━━━━━━━━━━"
+        f"◈ **Size:** `{current/(1024*1024):.1f}` / `{total/(1024*1024):.1f} MB`"
     )
     try: await status_msg.edit(tmp)
     except: pass
+
+# --- Message Handlers | معالجة الرسائل ---
 
 @app.on_message(filters.command("start") & filters.private)
 async def start(client, message):
@@ -88,62 +95,70 @@ async def start(client, message):
     
     welcome_text = (
         f"✨━━━━━━━━━━━━━✨\n"
-        f"  🙋‍♂️ Welcome | **{message.from_user.first_name}**\n"
-        f"  🌟 In **{BOT_NAME}** World\n"
+        f"  🙋‍♂️ أهلاً بك يا **{message.from_user.first_name}**\n"
+        f"  🌟 في عالم **{BOT_NAME}**\n"
         f"✨━━━━━━━━━━━━━✨\n\n"
-        f"🚀 **Fast Downloader for:**\n"
+        f"🚀 **أرسل رابط الفيديو من المنصات التالية:**\n"
         f"📹 YouTube | 📸 Instagram | 🎵 TikTok\n"
         f"👻 Snapchat | 🔵 Facebook\n\n"
-        f"👇 **Send link now! | أرسل الرابط الآن!**"
+        f"👇 **أرسل الرابط الآن!**"
     )
     await message.reply(welcome_text, reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True))
 
-@app.on_message(filters.text & filters.private)
+@app.on_message(filters.text & filters.private & ~filters.bot) # فلتر لمنع البوتات والتكرار
 async def handle_text(client, message):
     if not await check_subscription(client, message): return
     text, user_id = message.text, message.from_user.id
     
     if text == '🔄 Restart Service | بدء الخدمة':
-        await message.reply("📡 **System Ready.. النظام جاهز!** ⚡️")
+        await message.reply("📡 **النظام جاهز لاستقبال روابطك!** ⚡️")
         return
     
     if text == '👨‍💻 Developer | المطور':
-        msg = f"👑 **Main Developer:** {DEV_USER}\n📢 **Our Channel:** @{CHANNEL_USER}\n"
+        msg = f"👑 **Main Developer:** {DEV_USER}\n📢 **Channel:** @{CHANNEL_USER}\n"
         if user_id == ADMIN_ID: msg += f"📊 **Total Users:** `{get_users_count()}`"
         await message.reply(msg)
         return
 
+    # نظام الإذاعة
     if text == '📣 Broadcast | إذاعة' and user_id == ADMIN_ID:
-        await message.reply("📥 **Send your message | أرسل رسالة الإذاعة:**")
+        await message.reply("📥 **أرسل رسالة الإذاعة الآن (نص، صورة، فيديو):**")
         user_cache[f"bc_{user_id}"] = True
         return
 
     if user_cache.get(f"bc_{user_id}"):
         users = open(USERS_FILE).read().splitlines()
+        await message.reply(f"🔄 جاري الإرسال إلى {len(users)} مستخدم...")
+        count = 0
         for u in users:
-            try: await message.copy(int(u))
+            try: 
+                await message.copy(int(u))
+                count += 1
+                await asyncio.sleep(0.1) # حماية من السبام
             except: pass
-        await message.reply(f"✅ **Broadcast Sent to {len(users)} users**")
+        await message.reply(f"✅ تمت الإذاعة بنجاح لـ {count} مستخدم.")
         user_cache[f"bc_{user_id}"] = False
         return
 
+    # معالجة الروابط
     if "http" in text:
-        status = await message.reply("🔍 **Analyzing.. جاري المعالجة** ⏳")
+        status = await message.reply("🔍 **جاري فحص الرابط واستخراج الجودات...** ⏳")
         try:
             formats = await asyncio.to_thread(get_all_formats, text)
             user_cache[user_id] = text
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
-            await status.edit("✅ **Formats Found | تم استخراج الجودات**\nChoose your option: 👇", reply_markup=InlineKeyboardMarkup(btns))
-        except: await status.edit("❌ **Error | فشل المعالجة**")
+            await status.edit("✅ **تم العثور على الوسائط!**\nاختر الجودة المطلوبة للتحميل: 👇", reply_markup=InlineKeyboardMarkup(btns))
+        except: await status.edit("❌ **عذراً، فشل استخراج البيانات. تأكد من صحة الرابط.**")
 
 @app.on_callback_query()
 async def download_cb(client, callback_query):
     f_id, user_id = callback_query.data, callback_query.from_user.id
     url = user_cache.get(user_id)
     if not url:
-        await callback_query.answer("⚠️ Session Expired", show_alert=True); return
+        await callback_query.answer("⚠️ انتهت الجلسة، أرسل الرابط مجدداً.", show_alert=True)
+        return
     
-    await callback_query.message.edit("⚙️ **Processing.. جاري التنفيذ**\n━━━━━━━━━━━━━━━━━━\n📡 **Status:** `Direct Connection` ⚡️\n⏳ **Please wait.. يرجى الانتظار**")
+    await callback_query.message.edit("⚙️ **جاري التحميل والمعالجة...**\n━━━━━━━━━━━━━━━━━━\n📡 **الاتصال:** `Direct Connection` ⚡️")
     is_audio = "audio" in f_id
     file_path = f"media_{user_id}.{'m4a' if is_audio else 'mp4'}"
     
@@ -151,14 +166,19 @@ async def download_cb(client, callback_query):
         await asyncio.to_thread(run_download, url, f_id, file_path)
         if os.path.exists(file_path):
             st = time.time()
-            if is_audio: await client.send_audio(user_id, file_path, caption=f"🎵 **Audio by {BOT_NAME}**", progress=progress_bar, progress_args=(callback_query.message, st))
-            else: await client.send_video(user_id, file_path, caption=f"🎬 **Video by {BOT_NAME}**", progress=progress_bar, progress_args=(callback_query.message, st))
-            await client.send_message(user_id, f"✨━━━━━━━━━━━━━✨\n✅ **Mission Completed | تمت المهمة**\n✨━━━━━━━━━━━━━✨\n\n📂 **Status:** `Ready` 🎬\n🚀 **By:** **{BOT_NAME}**")
+            if is_audio: 
+                await client.send_audio(user_id, file_path, caption=f"🎵 **{BOT_NAME}**", progress=progress_bar, progress_args=(callback_query.message, st))
+            else: 
+                await client.send_video(user_id, file_path, caption=f"🎬 **{BOT_NAME}**", progress=progress_bar, progress_args=(callback_query.message, st))
+            
+            # الرسالة النهائية الجميلة
+            await client.send_message(user_id, f"✨━━━━━━━━━━━━━✨\n✅ **تمت المهمة بنجاح**\n✨━━━━━━━━━━━━━✨\n\n📂 **الحالة:** `جاهز للتحميل` 🎬\n🚀 **بواسطة:** **{BOT_NAME}**")
             await callback_query.message.delete()
-    except Exception as e: await callback_query.message.edit(f"❌ **Failed:** {e}")
+    except Exception as e: 
+        await callback_query.message.edit(f"❌ **فشل التحميل:** {str(e)}")
     finally: 
         if os.path.exists(file_path): os.remove(file_path)
 
 if __name__ == "__main__":
-    keep_alive() # بدء الخادم الوهمي لمنع توقف ريندر
-    app.run()    # تشغيل البوت
+    keep_alive() # تشغيل خادم Waitress لتجاوز نظام Port في Render
+    app.run()
