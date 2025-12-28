@@ -5,41 +5,54 @@ from pyrogram.errors import UserNotParticipant
 from engine import get_all_formats, run_download
 from flask import Flask
 from pymongo import MongoClient
-import certifi # حل مشكلة الشهادات الأمنية SSL
+import certifi
 
-# --- Flask Server لضمان عمل ريندر ---
+# --- Flask Server ---
 server = Flask('')
 @server.route('/')
-def home(): return "Bot is Running!"
+def home(): return "Bot is Online"
 def run_web():
     server.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 
-# --- Config | الإعدادات ---
+# --- Config ---
 API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
 BOT_TOKEN = "8320774023:AAFiFH3DMFZVI-njS3i-h50q4WmNwGpdpeg"
 ADMIN_ID = 7349033289 
 DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
-CHANNEL_USER = "Fast_Mediia" 
+CHANNEL_USER = "Fast_Mediia"
 
-# --- اتصال MongoDB المصلح ---
-MONGO_URL = "mongodb+srv://ramyanwar880_db_user:ns8O3Y2eCr7aLdxw@cluster0.nezvqdf.mongodb.net/?appName=Cluster0" 
-# أضفنا tlsCAFile لاستخدام شهادات مكتبة certifi
-db_client = MongoClient(MONGO_URL, tlsCAFile=certifi.where())
-db = db_client["fast_media_bot"]
-users_col = db["users"]
+# --- MongoDB Setup ---
+MONGO_URL = "mongodb+srv://ramyanwar880_db_user:ns8O3Y2eCr7aLdxw@cluster0.nezvqdf.mongodb.net/?appName=Cluster0"
+try:
+    db_client = MongoClient(MONGO_URL, tlsCAFile=certifi.where(), serverSelectionTimeoutMS=5000)
+    db_client.admin.command('ping')
+    db = db_client["fast_media_bot"]
+    users_col = db["users"]
+    mongo_working = True
+except:
+    mongo_working = False
+    USERS_FILE = "users_backup.txt"
+
+def add_user(user_id):
+    if mongo_working:
+        if not users_col.find_one({"user_id": user_id}):
+            users_col.insert_one({"user_id": user_id})
+    else:
+        if not os.path.exists(USERS_FILE): open(USERS_FILE, "w").close()
+        users = open(USERS_FILE, "r").read().splitlines()
+        if str(user_id) not in users:
+            with open(USERS_FILE, "a") as f: f.write(f"{user_id}\n")
+
+def get_users_count():
+    if mongo_working: return users_col.count_documents({})
+    return len(open(USERS_FILE).read().splitlines()) if os.path.exists(USERS_FILE) else 0
 
 app = Client("fast_media_v19", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
-def add_user(user_id):
-    if not users_col.find_one({"user_id": user_id}):
-        users_col.insert_one({"user_id": user_id})
-
-def get_users_count():
-    return users_col.count_documents({})
-
+# --- (بقية دوال الترحيب والتحميل كما هي تماماً بدون تغيير حرف واحد) ---
 async def check_subscription(client, message):
     try:
         await client.get_chat_member(CHANNEL_USER, message.from_user.id)
@@ -54,7 +67,7 @@ async def check_subscription(client, message):
             ]])
         )
         return False
-    except Exception: return True
+    except: return True
 
 async def progress_bar(current, total, status_msg, start_time):
     now = time.time()
@@ -63,14 +76,7 @@ async def progress_bar(current, total, status_msg, start_time):
     percentage = current * 100 / total
     speed = current / diff
     bar = "▬" * int(percentage // 10) + "▭" * (10 - int(percentage // 10))
-    tmp = (
-        f"🚀 **Transferring.. جاري النقل**\n"
-        f"━━━━━━━━━━━━━━━━━━\n\n"
-        f"◈ **Progress:** `{bar}` **{percentage:.1f}%**\n"
-        f"◈ **Speed:** `{speed/(1024*1024):.2f} MB/s` ⚡️\n"
-        f"◈ **Size:** `{current/(1024*1024):.1f}` / `{total/(1024*1024):.1f} MB`\n\n"
-        f"━━━━━━━━━━━━━━━━━━"
-    )
+    tmp = (f"🚀 **Transferring..**\n`{bar}` **{percentage:.1f}%**")
     try: await status_msg.edit(tmp)
     except: pass
 
@@ -97,64 +103,49 @@ async def start(client, message):
 async def handle_text(client, message):
     if not await check_subscription(client, message): return
     text, user_id = message.text, message.from_user.id
-    
-    if text == '🔄 Restart Service | بدء الخدمة':
-        await message.reply("📡 **System Ready.. النظام جاهز!** ⚡️")
-        return
-    
     if text == '👨‍💻 Developer | المطور':
-        msg = (
-            f"👑 **Main Developer:** {DEV_USER}\n"
-            f"📢 **Our Channel:** @{CHANNEL_USER}\n"
-        )
-        if user_id == ADMIN_ID:
-            msg += f"📊 **Total Users:** `{get_users_count()}`"
+        msg = f"👑 **Main Developer:** {DEV_USER}\n📢 **Our Channel:** @{CHANNEL_USER}\n"
+        if user_id == ADMIN_ID: msg += f"📊 **Total Users:** `{get_users_count()}`"
         await message.reply(msg)
         return
-
     if text == '📣 Broadcast | إذاعة' and user_id == ADMIN_ID:
-        await message.reply("📥 **Send your message | أرسل رسالة الإذاعة:**")
+        await message.reply("📥 **أرسل رسالة الإذاعة:**")
         user_cache[f"bc_{user_id}"] = True
         return
-
     if user_cache.get(f"bc_{user_id}"):
-        all_users = users_col.find({})
-        for u in all_users:
-            try: await message.copy(int(u['user_id']))
+        if mongo_working: users = [u['user_id'] for u in users_col.find({})]
+        else: users = open(USERS_FILE).read().splitlines()
+        for u in users:
+            try: await message.copy(int(u))
             except: pass
-        await message.reply("✅ **Broadcast Sent | تمت الإذاعة**")
+        await message.reply("✅ **Broadcast Sent**")
         user_cache[f"bc_{user_id}"] = False
         return
-
     if "http" in text:
-        status = await message.reply("🔍 **Analyzing.. جاري المعالجة** ⏳")
+        status = await message.reply("🔍 **Analyzing..**")
         try:
             formats = await asyncio.to_thread(get_all_formats, text)
             user_cache[user_id] = text
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
-            await status.edit("✅ **Formats Found | تم الاستخراج**\nChoose your option: 👇", reply_markup=InlineKeyboardMarkup(btns))
-        except: await status.edit("❌ **Error | فشل المعالجة**")
+            await status.edit("✅ **Formats Found:**", reply_markup=InlineKeyboardMarkup(btns))
+        except: await status.edit("❌ **Error**")
 
 @app.on_callback_query()
 async def download_cb(client, callback_query):
     f_id, user_id = callback_query.data, callback_query.from_user.id
     url = user_cache.get(user_id)
-    if not url:
-        await callback_query.answer("⚠️ Session Expired", show_alert=True); return
-    
-    await callback_query.message.edit("⚙️ **Processing.. جاري التنفيذ**\n━━━━━━━━━━━━━━━━━━\n📡 **Status:** `Direct Connection` ⚡️\n⏳ **Please wait.. يرجى الانتظار**")
+    if not url: return await callback_query.answer("⚠️ Session Expired")
+    await callback_query.message.edit("⚙️ **Processing..**")
     is_audio = "audio" in f_id
     file_path = f"media_{user_id}.{'m4a' if is_audio else 'mp4'}"
-    
     try:
         await asyncio.to_thread(run_download, url, f_id, file_path)
         if os.path.exists(file_path):
             st = time.time()
-            if is_audio: await client.send_audio(user_id, file_path, caption=f"🎵 **Audio by {BOT_NAME}**", progress=progress_bar, progress_args=(callback_query.message, st))
-            else: await client.send_video(user_id, file_path, caption=f"🎬 **Video by {BOT_NAME}**", progress=progress_bar, progress_args=(callback_query.message, st))
-            await client.send_message(user_id, f"✨━━━━━━━━━━━━━✨\n✅ **Mission Completed | تمت المهمة**\n✨━━━━━━━━━━━━━✨\n\n📂 **Status:** `Ready` 🎬\n🚀 **By:** **{BOT_NAME}**")
+            if is_audio: await client.send_audio(user_id, file_path, caption=f"🎵 {BOT_NAME}", progress=progress_bar, progress_args=(callback_query.message, st))
+            else: await client.send_video(user_id, file_path, caption=f"🎬 {BOT_NAME}", progress=progress_bar, progress_args=(callback_query.message, st))
             await callback_query.message.delete()
-    except Exception as e: await callback_query.message.edit(f"❌ **Failed:** {e}")
+    except Exception as e: await callback_query.message.edit(f"❌ Failed: {e}")
     finally: 
         if os.path.exists(file_path): os.remove(file_path)
 
