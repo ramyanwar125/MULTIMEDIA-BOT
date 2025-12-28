@@ -5,7 +5,7 @@ from pyrogram.errors import UserNotParticipant
 from engine import get_all_formats, run_download
 from flask import Flask
 from pymongo import MongoClient
-import certifi # مكتبة لحل مشكلة الـ SSL handshake failed
+import certifi # حل مشكلة الشهادات الأمنية SSL
 
 # --- Flask Server لضمان عمل ريندر ---
 server = Flask('')
@@ -23,9 +23,9 @@ DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
 CHANNEL_USER = "Fast_Mediia" 
 
-# --- اتصال MongoDB (مع حل مشكلة الـ SSL) ---
-# أضفنا tlsCAFile=certifi.where() لحل الخطأ الذي ظهر لك
+# --- اتصال MongoDB المصلح ---
 MONGO_URL = "mongodb+srv://ramyanwar880_db_user:ns8O3Y2eCr7aLdxw@cluster0.nezvqdf.mongodb.net/?appName=Cluster0" 
+# أضفنا tlsCAFile لاستخدام شهادات مكتبة certifi
 db_client = MongoClient(MONGO_URL, tlsCAFile=certifi.where())
 db = db_client["fast_media_bot"]
 users_col = db["users"]
@@ -33,16 +33,13 @@ users_col = db["users"]
 app = Client("fast_media_v19", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
-# دالة حفظ المستخدمين
 def add_user(user_id):
     if not users_col.find_one({"user_id": user_id}):
         users_col.insert_one({"user_id": user_id})
 
-# دالة جلب عدد المستخدمين
 def get_users_count():
     return users_col.count_documents({})
 
-# دالة التحقق من الاشتراك
 async def check_subscription(client, message):
     try:
         await client.get_chat_member(CHANNEL_USER, message.from_user.id)
@@ -59,7 +56,6 @@ async def check_subscription(client, message):
         return False
     except Exception: return True
 
-# شريط التقدم
 async def progress_bar(current, total, status_msg, start_time):
     now = time.time()
     diff = now - start_time
