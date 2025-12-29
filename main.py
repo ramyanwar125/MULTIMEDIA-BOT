@@ -1,14 +1,16 @@
 import os
 import asyncio
+import time
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from flask import Flask
 from threading import Thread
+from engine import get_all_formats, run_download
 
-# --- الجزء الخاص بخادم الويب (لتجنب رسائل الخطأ في الاستضافة) ---
+# --- خادم الويب ---
 web_app = Flask(__name__)
 @web_app.route('/')
-def home(): return "<h1>Bot is Alive!</h1>"
+def home(): return "Bot is Online"
 
 def run_web():
     web_app.run(host="0.0.0.0", port=8080)
@@ -18,35 +20,56 @@ API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
 BOT_TOKEN = "8320774023:AAEgqqEwFCxvs1_vKqhqwtOmq0svd2eB0Yc"
 
-app = Client("my_production_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("final_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+
+# تخزين مؤقت للروابط
+url_cache = {}
 
 @app.on_message(filters.command("start"))
 async def start(client, message):
-    await message.reply("✅ **تم تشغيل البوت بنجاح!**\nأرسل لي أي رابط فيديو (يوتيوب، تيك توك، انستقرام) وسأعطيك خيارات التحميل.")
+    await message.reply("🚀 أرسل رابط الفيديو الآن!")
 
 @app.on_message(filters.text & filters.private)
 async def handle_link(client, message):
     if "http" in message.text:
-        # ملاحظة: إذا لم ترفع ملف engine.py سيتوقف البوت هنا
-        try:
-            from engine import get_all_formats
-            status = await message.reply("🔍 جاري فحص الرابط...")
-            formats = await asyncio.to_thread(get_all_formats, message.text)
-            
-            if not formats:
-                await status.edit("❌ لم أجد جودات متاحة.")
-                return
-                
+        status = await message.reply("🔍 جاري فحص الرابط...")
+        formats = await asyncio.to_thread(get_all_formats, message.text)
+        if formats:
+            url_cache[message.from_user.id] = message.text # حفظ الرابط
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
-            await status.edit("✅ اختر الجودة:", reply_markup=InlineKeyboardMarkup(btns))
-        except ImportError:
-            await message.reply("⚠️ خطأ: ملف `engine.py` مفقود من حساب GitHub الخاص بك!")
-        except Exception as e:
-            await message.reply(f"❌ حدث خطأ: {str(e)[:50]}")
+            await status.edit("✅ اختر الجودة للتحميل:", reply_markup=InlineKeyboardMarkup(btns))
+        else:
+            await status.edit("❌ فشل استخراج الجودات.")
+
+# --- الجزء المفقود: معالجة الضغط على زر الجودة ---
+@app.on_callback_query()
+async def download_logic(client, callback_query):
+    user_id = callback_query.from_user.id
+    format_id = callback_query.data
+    url = url_cache.get(user_id)
+
+    if not url:
+        await callback_query.answer("⚠️ انتهت الجلسة، أرسل الرابط مجدداً", show_alert=True)
+        return
+
+    await callback_query.message.edit("⚙️ جاري التحميل من السيرفر... يرجى الانتظار")
+    
+    file_path = f"video_{user_id}.mp4"
+    try:
+        # تحميل الفيديو إلى سيرفر الاستضافة
+        await asyncio.to_thread(run_download, url, format_id, file_path)
+        
+        # إرسال الفيديو للمستخدم
+        await callback_query.message.edit("📤 جاري رفع الفيديو إلى تليجرام...")
+        await client.send_video(chat_id=user_id, video=file_path, caption="✅ تم التحميل بنجاح!")
+        await callback_query.message.delete()
+        
+    except Exception as e:
+        await callback_query.message.edit(f"❌ خطأ في التحميل: {str(e)[:100]}")
+    finally:
+        if os.path.exists(file_path):
+            os.remove(file_path) # حذف الفيديو من السيرفر لتوفير المساحة
 
 if __name__ == "__main__":
-    # تشغيل الويب في الخلفية
     Thread(target=run_web, daemon=True).start()
-    # تشغيل البوت
-    print("🚀 البوت بدأ العمل...")
     app.run()
