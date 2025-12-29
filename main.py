@@ -4,7 +4,7 @@ from pyrogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyb
 from pyrogram.errors import UserNotParticipant
 from engine import get_all_formats, run_download
 
-# --- الإعدادات الأساسية ---
+# --- الإعدادات ---
 API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
 BOT_TOKEN = "8320774023:AAEgqqEwFCxvs1_vKqhqwtOmq0svd2eB0Yc"
@@ -14,10 +14,10 @@ BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
 CHANNEL_USER = "Fast_Mediia" 
 USERS_FILE = "users_database.txt" 
 
-app = Client("fast_media_fix", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("fast_media_worker", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
-# --- وظائف قاعدة البيانات والاشتراك ---
+# --- وظائف قاعدة البيانات ---
 def add_user(user_id):
     if not os.path.exists(USERS_FILE): open(USERS_FILE, "w").close()
     try:
@@ -27,6 +27,7 @@ def add_user(user_id):
             with open(USERS_FILE, "a") as f: f.write(f"{user_id}\n")
     except: pass
 
+# --- التحقق من الاشتراك ---
 async def check_subscription(client, message):
     try:
         await client.get_chat_member(CHANNEL_USER, message.from_user.id)
@@ -43,11 +44,11 @@ async def check_subscription(client, message):
         return False
     except: return True
 
-# --- شريط التقدم السريع ---
+# --- شريط التقدم (تم تعديله لتقليل ضغط تليجرام) ---
 async def progress_bar(current, total, status_msg, start_time):
     now = time.time()
     diff = now - start_time
-    if diff < 1.0: return 
+    if diff < 3.0: return # تحديث كل 3 ثوانٍ لتجنب الـ FloodWait
     
     percentage = current * 100 / total
     speed = current / diff
@@ -64,7 +65,7 @@ async def progress_bar(current, total, status_msg, start_time):
     try: await status_msg.edit(tmp)
     except: pass
 
-# --- الأوامر ---
+# --- التعامل مع الرسائل ---
 @app.on_message(filters.command("start") & filters.private)
 async def start(client, message):
     if not await check_subscription(client, message): return
@@ -116,7 +117,7 @@ async def download_cb(client, callback_query):
         await callback_query.answer("⚠️ انتهت الجلسة، ارسل الرابط مجدداً", show_alert=True)
         return
     
-    status_msg = await callback_query.message.edit("⚙️ **جاري سحب الملف...**\n━━━━━━━━━━━━━━━━━━\n📡 **الوضع:** `Direct Speed` ⚡️")
+    status_msg = await callback_query.message.edit("⚙️ **جاري سحب الملف من المصدر...**\n━━━━━━━━━━━━━━━━━━\n📡 **الوضع:** `High Speed` ⚡️")
     
     is_audio = "audio" in f_id or "bestaudio" in f_id
     file_path = f"media_{user_id}.{'m4a' if is_audio else 'mp4'}"
@@ -142,5 +143,5 @@ async def download_cb(client, callback_query):
         if os.path.exists(file_path): os.remove(file_path)
 
 if __name__ == "__main__":
-    print("🚀 البوت يعمل الآن كـ Worker مستقل لمنع التكرار...")
+    print("🚀 البوت يعمل الآن بنظام الـ Worker المستقر...")
     app.run()
