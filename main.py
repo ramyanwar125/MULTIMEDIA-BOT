@@ -1,28 +1,34 @@
-import os, asyncio, time
+import os, asyncio, time, sys
 from pyrogram import Client, filters
 from pyrogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import UserNotParticipant
 from engine import get_all_formats, run_download
 
-# --- الإعدادات ---
+# --- Config | الإعدادات ---
 API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
-BOT_TOKEN = "8320774023:AAGGF39bEiyfCH5Dnek_DwhrdXPoVI5fpF8" 
+BOT_TOKEN = "8320774023:AAGGF39bEiyfCH5Dnek_DwhrdXPoVI5fpF8"
 ADMIN_ID = 7349033289 
 DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
-CHANNEL_USER = "Fast_Mediia" 
+CHANNEL_USER = "Fast_Mediia" # يوزر القناة بدون @
 USERS_FILE = "users_database.txt" 
 
-app = Client("fast_media_v2_final", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+# استخدام اسم جلسة فريد لكل عملية تشغيل
+app = Client("fast_media_v19_protected", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
-# --- دالات النظام ---
+# --- Functions | الدالات ---
+
 def add_user(user_id):
     if not os.path.exists(USERS_FILE): open(USERS_FILE, "w").close()
     users = open(USERS_FILE, "r").read().splitlines()
     if str(user_id) not in users:
         with open(USERS_FILE, "a") as f: f.write(f"{user_id}\n")
+
+def get_users_count():
+    if not os.path.exists(USERS_FILE): return 0
+    return len(open(USERS_FILE, "r").read().splitlines())
 
 async def check_subscription(client, message):
     try:
@@ -31,115 +37,143 @@ async def check_subscription(client, message):
     except UserNotParticipant:
         await message.reply(
             f"⚠️ **عذراً، يجب عليك الاشتراك في القناة أولاً!**\n\n"
-            f"قناة البوت: @{CHANNEL_USER}",
+            f"قناة البوت: @{CHANNEL_USER}\n"
+            f"بعد الاشتراك، أرسل /start مجدداً.",
             reply_markup=InlineKeyboardMarkup([[
                 InlineKeyboardButton("✅ Join Channel | اشترك الآن", url=f"https://t.me/{CHANNEL_USER}")
             ]])
         )
         return False
-    except: return True
+    except Exception: return True
 
-# --- شريط التقدم ---
 async def progress_bar(current, total, status_msg, start_time):
     now = time.time()
-    if now - start_time < 3.5: return 
+    diff = now - start_time
+    if diff < 3.0: return # زيادة الوقت قليلاً لثبات السيرفر
     percentage = current * 100 / total
-    speed = current / (now - start_time)
+    speed = current / diff
     bar = "▬" * int(percentage // 10) + "▭" * (10 - int(percentage // 10))
-    try:
-        await status_msg.edit(
-            f"🚀 **Transferring.. جاري النقل**\n"
-            f"━━━━━━━━━━━━━━━━━━\n\n"
-            f"◈ **Progress:** `{bar}` **{percentage:.1f}%**\n"
-            f"◈ **Speed:** `{speed/(1024*1024):.2f} MB/s` ⚡️\n\n"
-            f"━━━━━━━━━━━━━━━━━━"
-        )
+    tmp = (
+        f"🚀 **Transferring.. جاري النقل**\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"◈ **Progress:** `{bar}` **{percentage:.1f}%**\n"
+        f"◈ **Speed:** `{speed/(1024*1024):.2f} MB/s` ⚡️\n"
+        f"◈ **Size:** `{current/(1024*1024):.1f}` / `{total/(1024*1024):.1f} MB`\n\n"
+        f"━━━━━━━━━━━━━━━━━━"
+    )
+    try: await status_msg.edit(tmp)
     except: pass
 
-# --- الأوامر ---
+# --- Handlers | المعالجات ---
+
 @app.on_message(filters.command("start") & filters.private)
 async def start(client, message):
     if not await check_subscription(client, message): return
     add_user(message.from_user.id)
+    kb = [['🔄 Restart Service | بدء الخدمة'], ['👨‍💻 Developer | المطور']]
+    if message.from_user.id == ADMIN_ID: kb[1].append('📣 Broadcast | إذاعة')
     
-    # رسالة ترحيب فخمة
     welcome_text = (
         f"✨━━━━━━━━━━━━━✨\n"
-        f"  🙋‍♂️ **أهلاً بك يا {message.from_user.first_name}**\n"
-        f"  🌟 **في بوت {BOT_NAME}**\n"
+        f"  🙋‍♂️ Welcome | أهلاً بك يا **{message.from_user.first_name}**\n"
+        f"  🌟 In **{BOT_NAME}** World\n"
         f"✨━━━━━━━━━━━━━✨\n\n"
-        f"🚀 **يمكنني التحميل من المواقع التالية:**\n"
-        f"YouTube, TikTok, Instagram, Facebook\n\n"
-        f"🔗 **فقط أرسل لي الرابط الآن!**"
+        f"🚀 **Fast Downloader for | بوت تحميل سريع:**\n"
+        f"📹 YouTube | 📸 Instagram | 🎵 TikTok\n"
+        f"👻 Snapchat | 🔵 Facebook\n\n"
+        f"👇 **Send link now! | أرسل الرابط الآن!**"
     )
-    
-    kb = [['🔄 بدء الخدمة'], ['👨‍💻 المطور']]
-    if message.from_user.id == ADMIN_ID: kb[0].append('📣 الإذاعة')
-    
     await message.reply(welcome_text, reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True))
-
-@app.on_message(filters.regex('👨‍💻 المطور') & filters.private)
-async def dev_info(client, message):
-    await message.reply(f"👤 **المطور:** {DEV_USER}\n\nيمكنك التواصل مع المطور لأي استفسار أو طلب بوت خاص.")
-
-@app.on_message(filters.regex('📣 الإذاعة') & filters.private & filters.user(ADMIN_ID))
-async def broadcast_manager(client, message):
-    await message.reply("📝 **أرسل الآن الرسالة التي تريد إذاعتها لجميع المستخدمين (نص، صورة، فيديو):**")
-
-# معالجة الإذاعة عند إرسال المحتوى
-@app.on_message(filters.private & filters.user(ADMIN_ID) & ~filters.command(["start"]))
-async def do_broadcast(client, message):
-    if message.text in ['🔄 بدء الخدمة', '👨‍💻 المطور', '📣 الإذاعة'] or "http" in (message.text or ""):
-        return
-        
-    users = open(USERS_FILE, "r").read().splitlines()
-    count = 0
-    status = await message.reply("⏳ **جاري الإذاعة...**")
-    for user in users:
-        try:
-            await message.copy(int(user))
-            count += 1
-            await asyncio.sleep(0.1) # منع الحظر
-        except: pass
-    await status.edit(f"✅ **تمت الإذاعة بنجاح إلى {count} مستخدم.**")
 
 @app.on_message(filters.text & filters.private)
 async def handle_text(client, message):
     if not await check_subscription(client, message): return
-    if "http" in message.text:
-        status = await message.reply("🔍 **جاري فحص الرابط ومعالجته...**")
+    text, user_id = message.text, message.from_user.id
+    
+    if text == '🔄 Restart Service | بدء الخدمة':
+        await message.reply("📡 **System Ready.. النظام جاهز!** ⚡️")
+        return
+    
+    if text == '👨‍💻 Developer | المطور':
+        msg = (
+            f"👑 **Main Developer:** {DEV_USER}\n"
+            f"📢 **Our Channel:** @{CHANNEL_USER}\n"
+        )
+        if user_id == ADMIN_ID:
+            msg += f"📊 **Total Users:** `{get_users_count()}`"
+        await message.reply(msg)
+        return
+
+    if text == '📣 Broadcast | إذاعة' and user_id == ADMIN_ID:
+        await message.reply("📥 **Send your message | أرسل رسالة الإذاعة:**")
+        user_cache[f"bc_{user_id}"] = True
+        return
+
+    if user_cache.get(f"bc_{user_id}"):
+        users = open(USERS_FILE).read().splitlines()
+        status_msg = await message.reply("⏳ **Processing Broadcast...**")
+        count = 0
+        for u in users:
+            try: 
+                await message.copy(int(u))
+                count += 1
+                await asyncio.sleep(0.05) # حماية من السخونة
+            except: pass
+        await status_msg.edit(f"✅ **Broadcast Sent to {count} users**")
+        user_cache[f"bc_{user_id}"] = False
+        return
+
+    if "http" in text:
+        status = await message.reply("🔍 **Analyzing.. جاري المعالجة** ⏳")
         try:
-            formats = await asyncio.to_thread(get_all_formats, message.text)
-            user_cache[message.from_user.id] = message.text
+            formats = await asyncio.to_thread(get_all_formats, text)
+            user_cache[user_id] = text
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
-            await status.edit("✅ **تم العثور على الجودات المتوفرة:**\nإختر الجودة التي تناسبك: 👇", reply_markup=InlineKeyboardMarkup(btns))
-        except: await status.edit("❌ **عذراً، الرابط غير مدعوم أو فيه مشكلة.**")
+            await status.edit("✅ **Formats Found | تم الاستخراج**\nChoose your option: 👇", reply_markup=InlineKeyboardMarkup(btns))
+        except: await status.edit("❌ **Error | فشل المعالجة**")
 
 @app.on_callback_query()
 async def download_cb(client, callback_query):
     f_id, user_id = callback_query.data, callback_query.from_user.id
     url = user_cache.get(user_id)
-    if not url: return
+    if not url:
+        await callback_query.answer("⚠️ Session Expired", show_alert=True); return
     
-    status_msg = await callback_query.message.edit("⚙️ **جاري سحب الملف من المصدر...**")
-    file_path = f"media_{user_id}.mp4"
+    await callback_query.message.edit("⚙️ **Processing.. جاري التنفيذ**\n━━━━━━━━━━━━━━━━━━\n📡 **Status:** `Direct Connection` ⚡️\n⏳ **Please wait.. يرجى الانتظار**")
+    is_audio = "audio" in f_id
+    file_path = f"media_{user_id}.{'m4a' if is_audio else 'mp4'}"
+    
     try:
         await asyncio.to_thread(run_download, url, f_id, file_path)
         if os.path.exists(file_path):
-            st_time = time.time()
-            await client.send_video(user_id, file_path, caption=f"🎬 **تم التحميل بواسطة {BOT_NAME}**", 
-                                   progress=progress_bar, progress_args=(status_msg, st_time))
+            st = time.time()
+            if is_audio: await client.send_audio(user_id, file_path, caption=f"🎵 **Audio by {BOT_NAME}**", progress=progress_bar, progress_args=(callback_query.message, st))
+            else: await client.send_video(user_id, file_path, caption=f"🎬 **Video by {BOT_NAME}**", progress=progress_bar, progress_args=(callback_query.message, st))
+            
             # رسالة النجاح النهائية
-            await client.send_message(user_id, f"✨━━━━━━━━━━━━━✨\n✅ **تم تحميل وإرسال الفيديو بنجاح!**\n✨━━━━━━━━━━━━━✨")
-            await status_msg.delete()
-    except Exception as e: await status_msg.edit(f"❌ **حدث خطأ:** `{e}`")
-    finally:
+            await client.send_message(user_id, f"✨━━━━━━━━━━━━━✨\n✅ **Mission Completed | تمت المهمة**\n✨━━━━━━━━━━━━━✨\n\n📂 **Status:** `Ready` 🎬\n🚀 **By:** **{BOT_NAME}**")
+            await callback_query.message.delete()
+    except Exception as e: await callback_query.message.edit(f"❌ **Failed:** {e}")
+    finally: 
         if os.path.exists(file_path): os.remove(file_path)
 
+# --- التشغيل والحماية من التكرار ---
 if __name__ == "__main__":
+    # تنظيف أي ملفات جلسة قديمة لضمان دخول نظيف
     for f in os.listdir():
         if f.endswith(".session") or f.endswith(".session-journal"):
             try: os.remove(f)
             except: pass
-    print("🚀 البوت انطلق الآن بكافة مميزاته...")
-    app.run()
+
+    # القفل البرمجي لمنع تكرار الرسائل في Railway
+    lock_file = "bot.lock"
+    if os.path.exists(lock_file):
+        print("⚠️ Warning: Another instance is running. Closing this one.")
+        sys.exit(1)
+    
+    try:
+        with open(lock_file, "w") as f: f.write(str(os.getpid()))
+        print("🚀 Bot is starting as a clean single instance...")
+        app.run()
+    finally:
+        if os.path.exists(lock_file): os.remove(lock_file)
