@@ -6,15 +6,15 @@ from engine import get_all_formats, run_download
 from flask import Flask
 from threading import Thread
 
-# --- Web Server for Hosting ---
+# --- خادم الويب للحفاظ على استمرارية الخدمة ---
 web_app = Flask(__name__)
 @web_app.route('/')
-def home(): return "Bot is Online"
+def home(): return "Bot is Online & Healthy"
 
 def run_web():
     web_app.run(host="0.0.0.0", port=8080)
 
-# --- Config | الإعدادات ---
+# --- الإعدادات الأساسية ---
 API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
 BOT_TOKEN = "8320774023:AAEgqqEwFCxvs1_vKqhqwtOmq0svd2eB0Yc"
@@ -24,19 +24,15 @@ BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
 CHANNEL_USER = "Fast_Mediia"
 USERS_FILE = "users_database.txt" 
 
-app = Client("fast_media_v19", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("fast_media_v19_final", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
-# --- Functions ---
+# --- دالات النظام ---
 def add_user(user_id):
     if not os.path.exists(USERS_FILE): open(USERS_FILE, "w").close()
     users = open(USERS_FILE, "r").read().splitlines()
     if str(user_id) not in users:
         with open(USERS_FILE, "a") as f: f.write(f"{user_id}\n")
-
-def get_users_count():
-    if not os.path.exists(USERS_FILE): return 0
-    return len(open(USERS_FILE, "r").read().splitlines())
 
 async def check_subscription(client, message):
     try:
@@ -52,7 +48,7 @@ async def check_subscription(client, message):
             ]])
         )
         return False
-    except Exception: return True
+    except: return True
 
 async def progress_bar(current, total, status_msg, start_time):
     now = time.time()
@@ -72,7 +68,7 @@ async def progress_bar(current, total, status_msg, start_time):
     try: await status_msg.edit(tmp)
     except: pass
 
-# --- Handlers ---
+# --- الأوامر ---
 @app.on_message(filters.command("start") & filters.private)
 async def start(client, message):
     if not await check_subscription(client, message): return
@@ -85,7 +81,7 @@ async def start(client, message):
         f"  🙋‍♂️ Welcome | أهلاً بك يا **{message.from_user.first_name}**\n"
         f"  🌟 In **{BOT_NAME}** World\n"
         f"✨━━━━━━━━━━━━━✨\n\n"
-        f"🚀 **Fast Downloader for | بوت تحميل سريع:**\n"
+        f"🚀 **Fast Downloader for:**\n"
         f"📹 YouTube | 📸 Instagram | 🎵 TikTok\n"
         f"👻 Snapchat | 🔵 Facebook\n\n"
         f"👇 **Send link now! | أرسل الرابط الآن!**"
@@ -101,56 +97,49 @@ async def handle_text(client, message):
         await message.reply("📡 **System Ready.. النظام جاهز!** ⚡️")
         return
     
-    if text == '👨‍💻 Developer | المطور':
-        msg = f"👑 **Main Developer:** {DEV_USER}\n📢 **Our Channel:** @{CHANNEL_USER}\n"
-        if user_id == ADMIN_ID: msg += f"📊 **Total Users:** `{get_users_count()}`"
-        await message.reply(msg)
-        return
-
-    if text == '📣 Broadcast | إذاعة' and user_id == ADMIN_ID:
-        await message.reply("📥 **Send your message | أرسل رسالة الإذاعة:**")
-        user_cache[f"bc_{user_id}"] = True
-        return
-
-    if user_cache.get(f"bc_{user_id}"):
-        users = open(USERS_FILE).read().splitlines()
-        for u in users:
-            try: await message.copy(int(u))
-            except: pass
-        await message.reply("✅ **Broadcast Sent | تمت الإذاعة**")
-        user_cache[f"bc_{user_id}"] = False
-        return
-
     if "http" in text:
         status = await message.reply("🔍 **Analyzing.. جاري المعالجة** ⏳")
         try:
             formats = await asyncio.to_thread(get_all_formats, text)
+            if not formats or "error" in str(formats).lower():
+                await status.edit("❌ **فشل استخراج البيانات. تأكد من صحة الرابط.**")
+                return
+            
             user_cache[user_id] = text
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
-            await status.edit("✅ **Formats Found | تم الاستخراج**\nChoose your option: 👇", reply_markup=InlineKeyboardMarkup(btns))
-        except: await status.edit("❌ **Error | فشل المعالجة**")
+            await status.edit("✅ **تم العثور على الجودات:**\nإختر ما تريد تحميله: 👇", reply_markup=InlineKeyboardMarkup(btns))
+        except Exception as e:
+            await status.edit(f"❌ **حدث خطأ أثناء المعالجة:**\n`{str(e)[:50]}`")
 
 @app.on_callback_query()
 async def download_cb(client, callback_query):
     f_id, user_id = callback_query.data, callback_query.from_user.id
     url = user_cache.get(user_id)
-    if not url:
-        await callback_query.answer("⚠️ Session Expired", show_alert=True); return
     
-    status_msg = await callback_query.message.edit("⚙️ **Processing.. جاري التنفيذ**\n━━━━━━━━━━━━━━━━━━\n📡 **Status:** `Direct Connection` ⚡️\n⏳ **Please wait.. يرجى الانتظار**")
-    is_audio = "bestaudio" in f_id
+    if not url:
+        await callback_query.answer("⚠️ انتهت الجلسة، ارسل الرابط مجدداً", show_alert=True)
+        return
+    
+    status_msg = await callback_query.message.edit("⚙️ **جاري التحميل المعالجة...**\n━━━━━━━━━━━━━━━━━━\n📡 **الاتصال:** `Direct` ⚡️")
+    
+    is_audio = "audio" in f_id or "bestaudio" in f_id
     file_path = f"media_{user_id}.{'m4a' if is_audio else 'mp4'}"
     
     try:
         await asyncio.to_thread(run_download, url, f_id, file_path)
         if os.path.exists(file_path):
-            st = time.time()
-            if is_audio: await client.send_audio(user_id, file_path, caption=f"🎵 **Audio by {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st))
-            else: await client.send_video(user_id, file_path, caption=f"🎬 **Video by {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st))
-            await client.send_message(user_id, f"✨━━━━━━━━━━━━━✨\n✅ **Mission Completed | تمت المهمة**\n✨━━━━━━━━━━━━━✨\n\n📂 **Status:** `Ready` 🎬\n🚀 **By:** **{BOT_NAME}**")
+            st_time = time.time()
+            if is_audio:
+                await client.send_audio(user_id, file_path, caption=f"🎵 **{BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st_time))
+            else:
+                await client.send_video(user_id, file_path, caption=f"🎬 **{BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st_time))
+            
             await status_msg.delete()
-    except Exception as e: await callback_query.message.edit(f"❌ **Failed:** {e}")
-    finally: 
+        else:
+            await status_msg.edit("❌ **فشل تحميل الملف من السيرفر.**")
+    except Exception as e:
+        await status_msg.edit(f"❌ **خطأ أثناء الرفع:**\n`{str(e)[:100]}`")
+    finally:
         if os.path.exists(file_path): os.remove(file_path)
 
 if __name__ == "__main__":
