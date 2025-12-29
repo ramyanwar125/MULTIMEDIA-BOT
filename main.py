@@ -1,93 +1,129 @@
-import os
-import time
-import asyncio
+import os, asyncio, time
 from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.errors import UserNotParticipant
 from engine import get_all_formats, run_download
 
-# --- البيانات التي أرسلتها أنت ---
-API_ID = 24652261 
-API_HASH = "805608c0282b9a7c640e0be034c44158"
-BOT_TOKEN = "8320774023:AAEFFNtk5A7r7utaBFclQXltq6VhSYSrNvo"
+# --- الإعدادات المحدثة ---
+API_ID = 33536164
+API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
+BOT_TOKEN = "8320774023:AAEFFNtk5A7r7utaBFclQXltq6VhSYSrNvo" # التوكن الجديد
+ADMIN_ID = 7349033289 
+DEV_USER = "@TOP_1UP"
+BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
+CHANNEL_USER = "Fast_Mediia"
+USERS_FILE = "users_database.txt"
 
-# --- تنظيف إجباري للجلسات القديمة لحل خطأ الـ API ---
-for file in os.listdir():
-    if file.endswith(".session") or file.endswith(".session-journal"):
-        try:
-            os.remove(file)
-        except:
-            pass
-
-# إنشاء الكلاينت بنظام الجلسة المؤقتة
+# استخدام نظام الجلسة في الذاكرة لتخطي أخطاء الـ API ID في Railway
 app = Client(
-    "final_session",
-    api_id=API_ID,
-    api_hash=API_HASH,
+    "fast_media_v19", 
+    api_id=API_ID, 
+    api_hash=API_HASH, 
     bot_token=BOT_TOKEN,
-    in_memory=True # هذا يحل مشكلة الـ Bad Request نهائياً
+    in_memory=True 
 )
 
 user_cache = {}
 
-async def progress_bar(current, total, message, start_time):
+# --- دوال قاعدة البيانات والاشتراك ---
+
+def add_user(user_id):
+    if not os.path.exists(USERS_FILE): open(USERS_FILE, "w").close()
+    users = open(USERS_FILE, "r").read().splitlines()
+    if str(user_id) not in users:
+        with open(USERS_FILE, "a") as f: f.write(f"{user_id}\n")
+
+def get_users_count():
+    if not os.path.exists(USERS_FILE): return 0
+    return len(open(USERS_FILE, "r").read().splitlines())
+
+async def check_subscription(client, message):
+    try:
+        await client.get_chat_member(CHANNEL_USER, message.from_user.id)
+        return True
+    except UserNotParticipant:
+        await message.reply(
+            f"⚠️ **يجب عليك الاشتراك في القناة أولاً!**\n\n@{CHANNEL_USER}",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("✅ اشترك الآن", url=f"https://t.me/{CHANNEL_USER}")
+            ]])
+        )
+        return False
+    except: return True
+
+# --- شريط التقدم ---
+
+async def progress_bar(current, total, status_msg, start_time):
     try:
         now = time.time()
         diff = now - start_time
         if round(diff % 4.0) == 0 or current == total:
             percentage = current * 100 / total
             speed = current / diff if diff > 0 else 0
-            await message.edit(f"🚀 **جاري الرفع...**\n📊 {percentage:.1f}% | ⚡ {speed / 1024 / 1024:.1f} MB/s")
+            bar = "▬" * int(percentage // 10) + "▭" * (10 - int(percentage // 10))
+            await status_msg.edit(
+                f"🚀 **جاري الرفع...**\n"
+                f"📊 `{bar}` {percentage:.1f}%\n"
+                f"⚡ السرعة: `{speed/(1024*1024):.1f} MB/s`"
+            )
     except: pass
 
-@app.on_message(filters.command("start"))
-async def start(client, message):
-    await message.reply_text("👋 أهلاً بك! أرسل رابط الفيديو للتحميل.")
+# --- الأوامر ---
 
-@app.on_message(filters.regex(r'http'))
-async def link_handler(client, message):
-    url = message.text
-    user_id = message.from_user.id
-    user_cache[user_id] = url
-    status = await message.reply_text("🔎 جاري فحص الرابط...")
+@app.on_message(filters.command("start") & filters.private)
+async def start(client, message):
+    if not await check_subscription(client, message): return
+    add_user(message.from_user.id)
+    kb = [['🔄 Restart Service | بدء الخدمة'], ['👨‍💻 Developer | المطور']]
+    if message.from_user.id == ADMIN_ID: kb[1].append('📣 Broadcast | إذاعة')
+    await message.reply(f"🙋‍♂️ أهلاً بك في **{BOT_NAME}**\nأرسل الرابط للتحميل الآن!", reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True))
+
+@app.on_message(filters.text & filters.private)
+async def handle_text(client, message):
+    if not await check_subscription(client, message): return
+    text, user_id = message.text, message.from_user.id
     
-    try:
-        formats = await asyncio.to_thread(get_all_formats, url)
-        if not formats:
-            return await status.edit("❌ لم أجد جودات متاحة.")
-        
-        buttons = [[InlineKeyboardButton(text, callback_query_data=f_id)] for text, f_id in formats.items()]
-        await status.edit("✅ اختر الجودة:", reply_markup=InlineKeyboardMarkup(buttons))
-    except Exception as e:
-        await status.edit(f"❌ خطأ: {e}")
+    if text == '👨‍💻 Developer | المطور':
+        msg = f"👑 **المطور:** {DEV_USER}\n📊 **المستخدمين:** `{get_users_count()}`"
+        await message.reply(msg)
+        return
+
+    if "http" in text:
+        status = await message.reply("🔍 **جاري فحص الرابط...**")
+        try:
+            formats = await asyncio.to_thread(get_all_formats, text)
+            user_cache[user_id] = text
+            btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
+            await status.edit("✅ اختر الجودة المطلوبة:", reply_markup=InlineKeyboardMarkup(btns))
+        except: await status.edit("❌ فشل معالجة الرابط.")
 
 @app.on_callback_query()
 async def download_cb(client, callback_query):
-    f_id = callback_query.data
-    user_id = callback_query.from_user.id
+    f_id, user_id = callback_query.data, callback_query.from_user.id
     url = user_cache.get(user_id)
     if not url: return
-    
-    status = await callback_query.message.edit("⚙️ جاري التحميل...")
-    ext = "m4a" if "audio" in f_id else "mp4"
-    file_path = f"file_{user_id}_{int(time.time())}.{ext}"
 
+    status_msg = await callback_query.message.edit("⚙️ **جاري التحميل... يرجى الانتظار**")
+    is_audio = "audio" in f_id
+    file_path = f"media_{user_id}_{int(time.time())}.{'m4a' if is_audio else 'mp4'}"
+    
     try:
         await asyncio.to_thread(run_download, url, f_id, file_path)
         if os.path.exists(file_path):
-            await status.edit("📤 جاري الرفع...")
-            start_t = time.time()
-            if "audio" in f_id:
-                await client.send_audio(user_id, file_path, progress=progress_bar, progress_args=(status, start_t))
-            else:
-                await client.send_video(user_id, file_path, supports_streaming=True, progress=progress_bar, progress_args=(status, start_t))
-            await status.delete()
+            st = time.time()
+            await status_msg.edit("📤 **اكتمل التحميل، جاري الرفع...**")
+            if is_audio: 
+                await client.send_audio(user_id, file_path, caption=f"🎵 {BOT_NAME}", progress=progress_bar, progress_args=(status_msg, st))
+            else: 
+                await client.send_video(user_id, file_path, caption=f"🎬 {BOT_NAME}", supports_streaming=True, progress=progress_bar, progress_args=(status_msg, st))
+            await status_msg.delete()
         else:
-            await status.edit("❌ فشل تحميل الملف.")
-    except Exception as e:
-        await status.edit(f"❌ خطأ: {e}")
-    finally:
+            await status_msg.edit("❌ لم يتم العثور على الملف.")
+    except Exception as e: 
+        await status_msg.edit(f"❌ خطأ: {e}")
+    finally: 
         if os.path.exists(file_path): os.remove(file_path)
 
 if __name__ == "__main__":
-    print("🚀 البوت انطلق بالقيم الجديدة!")
+    print("✅ البوت يعمل الآن بالتوكن الجديد...")
     app.run()
