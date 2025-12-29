@@ -4,20 +4,20 @@ from pyrogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyb
 from pyrogram.errors import UserNotParticipant
 from engine import get_all_formats, run_download
 
-# --- الإعدادات ---
+# --- الإعدادات المحدثة ---
 API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
-BOT_TOKEN = "8320774023:AAHgMSW6NCwveOfuTEvTEbr17wtMl0VeSBw"
+BOT_TOKEN = "8320774023:AAHgMSW6NCwveOfuTEvTEbr17wtMl0VeSBw" # التوكن الجديد
 ADMIN_ID = 7349033289 
-DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
 CHANNEL_USER = "Fast_Mediia" 
 USERS_FILE = "users_database.txt" 
 
-app = Client("fast_media_worker", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+# اسم جلسة جديد تماماً لمنع أي تداخل مع التوكن القديم
+app = Client("fast_media_v2_session", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
-# --- وظائف قاعدة البيانات ---
+# --- دالات النظام ---
 def add_user(user_id):
     if not os.path.exists(USERS_FILE): open(USERS_FILE, "w").close()
     try:
@@ -27,121 +27,87 @@ def add_user(user_id):
             with open(USERS_FILE, "a") as f: f.write(f"{user_id}\n")
     except: pass
 
-# --- التحقق من الاشتراك ---
 async def check_subscription(client, message):
     try:
         await client.get_chat_member(CHANNEL_USER, message.from_user.id)
         return True
     except UserNotParticipant:
         await message.reply(
-            f"⚠️ **عذراً، يجب عليك الاشتراك في القناة أولاً!**\n\n"
-            f"قناة البوت: @{CHANNEL_USER}\n"
-            f"بعد الاشتراك، أرسل /start مجدداً.",
+            f"⚠️ **يجب الاشتراك في القناة أولاً!**\n\nقناة البوت: @{CHANNEL_USER}",
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("✅ Join Channel | اشترك الآن", url=f"https://t.me/{CHANNEL_USER}")
+                InlineKeyboardButton("✅ اشترك الآن", url=f"https://t.me/{CHANNEL_USER}")
             ]])
         )
         return False
     except: return True
 
-# --- شريط التقدم (تم تعديله لتقليل ضغط تليجرام) ---
 async def progress_bar(current, total, status_msg, start_time):
     now = time.time()
-    diff = now - start_time
-    if diff < 3.0: return # تحديث كل 3 ثوانٍ لتجنب الـ FloodWait
-    
+    if now - start_time < 3.0: return 
     percentage = current * 100 / total
-    speed = current / diff
+    speed = current / (now - start_time)
     bar = "▬" * int(percentage // 10) + "▭" * (10 - int(percentage // 10))
-    
-    tmp = (
-        f"🚀 **Transferring.. جاري النقل**\n"
-        f"━━━━━━━━━━━━━━━━━━\n\n"
-        f"◈ **Progress:** `{bar}` **{percentage:.1f}%**\n"
-        f"◈ **Speed:** `{speed/(1024*1024):.2f} MB/s` ⚡️\n"
-        f"◈ **Size:** `{current/(1024*1024):.1f}` / `{total/(1024*1024):.1f} MB`\n\n"
-        f"━━━━━━━━━━━━━━━━━━"
-    )
-    try: await status_msg.edit(tmp)
+    try:
+        await status_msg.edit(
+            f"🚀 **جاري النقل..**\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"◈ **التقدم:** `{percentage:.1f}%`\n"
+            f"◈ **السرعة:** `{speed/(1024*1024):.2f} MB/s`⚡️\n"
+            f"━━━━━━━━━━━━━━━━━━"
+        )
     except: pass
 
-# --- التعامل مع الرسائل ---
+# --- الأوامر ---
 @app.on_message(filters.command("start") & filters.private)
 async def start(client, message):
     if not await check_subscription(client, message): return
     add_user(message.from_user.id)
-    kb = [['🔄 Restart Service | بدء الخدمة'], ['👨‍💻 Developer | المطور']]
-    if message.from_user.id == ADMIN_ID: kb[0].append('📣 Broadcast | إذاعة')
-    
-    welcome_text = (
-        f"✨━━━━━━━━━━━━━✨\n"
-        f"  🙋‍♂️ Welcome | أهلاً بك يا **{message.from_user.first_name}**\n"
-        f"  🌟 In **{BOT_NAME}** World\n"
-        f"✨━━━━━━━━━━━━━✨\n\n"
-        f"🚀 **Fast Downloader for:**\n"
-        f"📹 YouTube | 📸 Instagram | 🎵 TikTok\n"
-        f"👻 Snapchat | 🔵 Facebook\n\n"
-        f"👇 **Send link now! | أرسل الرابط الآن!**"
-    )
-    await message.reply(welcome_text, reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True))
+    kb = [['🔄 بدء الخدمة'], ['👨‍💻 المطور']]
+    await message.reply(f"🙋‍♂️ أهلاً بك في **{BOT_NAME}**\nأرسل رابط الفيديو للتحميل فوراً 👇", 
+                        reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True))
 
 @app.on_message(filters.text & filters.private)
 async def handle_text(client, message):
     if not await check_subscription(client, message): return
-    text, user_id = message.text, message.from_user.id
-    
-    if text == '🔄 Restart Service | بدء الخدمة':
-        await message.reply("📡 **System Ready.. النظام جاهز!** ⚡️")
-        return
-    
-    if "http" in text:
-        status = await message.reply("🔍 **Analyzing.. جاري المعالجة** ⏳")
+    if "http" in message.text:
+        status = await message.reply("🔍 جاري فحص الرابط...")
         try:
-            formats = await asyncio.to_thread(get_all_formats, text)
-            if not formats:
-                await status.edit("❌ **فشل استخراج البيانات. تأكد من الرابط.**")
-                return
-            
-            user_cache[user_id] = text
+            formats = await asyncio.to_thread(get_all_formats, message.text)
+            user_cache[message.from_user.id] = message.text
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
-            await status.edit("✅ **تم العثور على الجودات:**\nإختر ما تريد تحميله: 👇", reply_markup=InlineKeyboardMarkup(btns))
+            await status.edit("✅ تم العثور على الجودات:\nإختر ما تريد تحميله: 👇", reply_markup=InlineKeyboardMarkup(btns))
         except:
-            await status.edit("❌ **خطأ في الرابط أو الموقع غير مدعوم.**")
+            await status.edit("❌ فشل استخراج البيانات، تأكد من الرابط.")
 
 @app.on_callback_query()
 async def download_cb(client, callback_query):
     f_id, user_id = callback_query.data, callback_query.from_user.id
     url = user_cache.get(user_id)
+    if not url: return
     
-    if not url:
-        await callback_query.answer("⚠️ انتهت الجلسة، ارسل الرابط مجدداً", show_alert=True)
-        return
-    
-    status_msg = await callback_query.message.edit("⚙️ **جاري سحب الملف من المصدر...**\n━━━━━━━━━━━━━━━━━━\n📡 **الوضع:** `High Speed` ⚡️")
-    
-    is_audio = "audio" in f_id or "bestaudio" in f_id
-    file_path = f"media_{user_id}.{'m4a' if is_audio else 'mp4'}"
+    status_msg = await callback_query.message.edit("⚙️ جاري التحميل من السيرفر...")
+    file_path = f"media_{user_id}.mp4"
     
     try:
         await asyncio.to_thread(run_download, url, f_id, file_path)
-        
         if os.path.exists(file_path):
             st_time = time.time()
-            if is_audio:
-                await client.send_audio(user_id, file_path, caption=f"🎵 **By {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st_time))
-            else:
-                await client.send_video(user_id, file_path, caption=f"🎬 **By {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st_time))
-            
-            await client.send_message(user_id, f"✨━━━━━━━━━━━━━✨\n✅ **Mission Completed | تمت المهمة**\n✨━━━━━━━━━━━━━✨\n\n📂 **Status:** `Ready` 🎬\n🚀 **By:** **{BOT_NAME}**")
+            await client.send_video(user_id, file_path, caption=f"🎬 **By {BOT_NAME}**", 
+                                   progress=progress_bar, progress_args=(status_msg, st_time))
+            await client.send_message(user_id, "✅ تمت المهمة بنجاح!")
             await status_msg.delete()
         else:
-            await status_msg.edit("❌ **حدث خطأ أثناء تحميل الملف.**")
-            
+            await status_msg.edit("❌ فشل تحميل الملف.")
     except Exception as e:
-        await status_msg.edit(f"❌ **Error:** `{str(e)[:100]}`")
+        await status_msg.edit(f"❌ خطأ: `{str(e)[:50]}`")
     finally:
         if os.path.exists(file_path): os.remove(file_path)
 
 if __name__ == "__main__":
-    print("🚀 البوت يعمل الآن بنظام الـ Worker المستقر...")
+    # تنظيف شامل قبل التشغيل
+    for f in os.listdir():
+        if f.endswith(".session") or f.endswith(".session-journal"):
+            try: os.remove(f)
+            except: pass
+    print("🚀 تشغيل البوت بالتوكن الجديد...")
     app.run()
