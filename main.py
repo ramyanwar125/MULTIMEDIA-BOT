@@ -26,7 +26,7 @@ threading.Thread(target=run_web, daemon=True).start()
 # --- Config | الإعدادات ---
 API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
-BOT_TOKEN = "8320774023:AAFiFH3DMFZVI-njS3i-h50q4WmNwGpdpeg"
+BOT_TOKEN = "8320774023:AAEgqqEwFCxvs1_vKqhqwtOmq0svd2eB0Yc"
 ADMIN_ID = 7349033289 
 DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
