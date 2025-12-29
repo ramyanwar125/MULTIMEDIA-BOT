@@ -2,15 +2,14 @@ import os
 import yt_dlp
 
 def prepare_engine():
-    """التحقق من وجود ملف الكوكيز الذي يحتوي على بيانات يوتيوب وإنستجرام"""
+    """التحقق من ملف الكوكيز (يوتيوب + إنستجرام)"""
     cookie_file = "cookies.txt"
     if not os.path.exists(cookie_file):
-        # سيعود بـ None إذا لم يجد الملف، لكننا نفضل وجوده لضمان تخطي الحظر
         return None
     return cookie_file
 
 def get_all_formats(url):
-    """استخراج الجودات المتاحة مع معالجة خاصة للفيسبوك والإنستجرام"""
+    """استخراج الجودات مع دعم كامل للمنصات الاجتماعية"""
     cookie_path = prepare_engine()
     
     ydl_opts = {
@@ -18,34 +17,40 @@ def get_all_formats(url):
         'nocheckcertificate': True, 
         'no_warnings': True,
         'cookiefile': cookie_path if cookie_path else None,
+        'format': 'best', # ضمان جلب معلومات صحيحة في البداية
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        formats_btns = {}
+        try:
+            info = ydl.extract_info(url, download=False)
+            formats_btns = {}
 
-        # التحقق من نوع المنصة لضمان جلب فيديو كامل (صوت + صورة)
-        is_social = any(x in url for x in ["facebook.com", "fb.watch", "instagram.com"])
+            # تمييز فيسبوك وإنستجرام وتيك توك لضمان جلب فيديو كامل
+            social_platforms = ["facebook.com", "fb.watch", "instagram.com", "tiktok.com"]
+            is_social = any(x in url for x in social_platforms)
 
-        if is_social:
-            # دمج أفضل فيديو مع أفضل صوت (يحل مشكلة "صوت فقط" في فيسبوك)
-            formats_btns["🎬 Best Quality | أفضل جودة"] = "bestvideo+bestaudio/best"
-        else:
-            # يوتيوب والمواقع الأخرى: استخراج الجودات المدمجة مباشرة
-            for f in info.get('formats', []):
-                # نختار فقط الملفات التي تحتوي فيديو وصوت معاً بصيغة mp4
-                if f.get('vcodec') != 'none' and f.get('acodec') != 'none' and f.get('ext') == 'mp4':
-                    res = f.get('height')
-                    if res:
-                        formats_btns[f"🎬 {res}p"] = f.get('format_id')
-        
-        # إضافة خيار تحميل الصوت فقط دائماً
-        formats_btns["🎶 Audio | تحميل صوت"] = "bestaudio[ext=m4a]/bestaudio"
-        
-        return formats_btns
+            if is_social:
+                # طلب أفضل فيديو + أفضل صوت (يحل مشكلة "صوت فقط" في فيسبوك)
+                formats_btns["🎬 Best Quality | أفضل جودة"] = "bestvideo+bestaudio/best"
+            else:
+                # يوتيوب والمواقع الأخرى
+                for f in info.get('formats', []):
+                    # نختار الجودات المدمجة الجاهزة بصيغة mp4 لتوفير الوقت
+                    if f.get('vcodec') != 'none' and f.get('acodec') != 'none' and f.get('ext') == 'mp4':
+                        res = f.get('height')
+                        if res:
+                            formats_btns[f"🎬 {res}p"] = f.get('format_id')
+            
+            # إضافة خيار الصوت دائماً بصيغة m4a المستقرة
+            formats_btns["🎶 Audio | تحميل صوت"] = "bestaudio[ext=m4a]/bestaudio"
+            
+            return formats_btns
+        except Exception as e:
+            print(f"Error extracting formats: {e}")
+            return {}
 
 def run_download(url, format_id, file_path):
-    """تنفيذ التحميل الفعلي والدمج باستخدام FFmpeg"""
+    """التحميل النهائي مع حل مشكلة Frag والملفات المؤقتة"""
     cookie_path = prepare_engine()
     
     ydl_opts = {
@@ -54,18 +59,24 @@ def run_download(url, format_id, file_path):
         'cookiefile': cookie_path if cookie_path else None,
         'nocheckcertificate': True,
         'quiet': True,
-        # --- إعدادات السرعة الفائقة ---
-        'concurrent_fragment_downloads': 15, 
-        'continuedl': True,
-        'buffersize': 1024 * 1024,
+        
+        # --- حل مشكلة Errno 2 و Frag (تحميل مستقر في Railway) ---
+        'concurrent_fragment_downloads': 5, # تقليل العدد لضمان ثبات الكتابة على القرص
+        'continuedl': False, # البدء من جديد لتجنب تضارب ملفات .part القديمة
         'retries': 10,
-        # --- إعدادات معالجة الفيديو (تتطلب وجود FFmpeg) ---
+        'buffersize': 1024 * 512, # حجم بافر مناسب للسيرفرات السحابية
+        
+        # --- إعدادات الدمج (تتطلب FFmpeg عبر Dockerfile) ---
         'merge_output_format': 'mp4',
         'postprocessor_args': [
-            '-c:v', 'copy', # نسخ الفيديو بدون إعادة ترميز لتوفير الوقت
-            '-c:a', 'aac'   # ترميز الصوت بصيغة متوافقة
+            '-c:v', 'copy', # نسخ الفيديو كما هو (أسرع)
+            '-c:a', 'aac'    # تحويل الصوت لصيغة متوافقة
         ],
     }
     
+    # حذف أي ملف قديم بنفس الاسم قبل البدء لتجنب الأخطاء
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
