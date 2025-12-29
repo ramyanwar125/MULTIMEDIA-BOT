@@ -7,7 +7,7 @@ from engine import get_all_formats, run_download
 # --- الإعدادات المحدثة ---
 API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
-BOT_TOKEN = "8320774023:AAEFFNtk5A7r7utaBFclQXltq6VhSYSrNvo" # التوكن الجديد
+BOT_TOKEN = "8320774023:AAG2YCeBsEew587TQoXBTnBQgBQgvLbI7p8" # التوكن الجديد
 ADMIN_ID = 7349033289 
 DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
