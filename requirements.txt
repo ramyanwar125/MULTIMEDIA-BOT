@@ -1,4 +1,4 @@
-https://github.com/Kurimuzard/pyrogram/archive/v2.1.25.zip
+pyrogram
 tgcrypto
 yt-dlp
 flask
