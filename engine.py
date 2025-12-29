@@ -21,25 +21,22 @@ def prepare_engine():
 def get_all_formats(url):
     cookie_path = prepare_engine()
     
-    ydl_opts = {
+        ydl_opts = {
         'quiet': True,
         'cookiefile': cookie_path,
         'nocheckcertificate': True,
         'no_warnings': True,
-        # إضافة العميل الأندرويد لتجاوز الحظر
+        # هذا الجزء هو المفتاح لحل مشكلة Player Response
         'extractor_args': {
             'youtube': {
-                'player_client': ['android', 'ios'],
+                'player_client': ['ios', 'mweb'], # استخدام مشغل الايفون والمتصفح المصغر
                 'player_skip': ['webpage', 'configs']
             }
         },
-        'user_agent': 'com.google.android.youtube/19.29.37 (Linux; U; Android 11) gzip'
+        # تحديث الـ User Agent ليتناسب مع مشغل iOS
+        'user_agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'
     }
-    
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        try:
-            info = ydl.extract_info(url, download=False)
-            formats_btns = {}
+
             
             # جلب الفيديو المدمج (صوت وصورة)
             for f in info.get('formats', []):
