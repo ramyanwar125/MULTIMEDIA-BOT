@@ -6,15 +6,16 @@ from engine import get_all_formats, run_download
 from flask import Flask
 from threading import Thread
 
-# --- خادم الويب للحفاظ على استمرارية الخدمة في الاستضافات المجانية ---
+# --- إعداد خادم الويب لمنع توقف البوت ---
 web_app = Flask(__name__)
 @web_app.route('/')
-def home(): return "FAST MEDIA BOT IS ONLINE"
+def home(): return "Bot Status: Running ✅"
 
 def run_web():
+    # استخدام 0.0.0.0 ليتوافق مع Railway و Koyeb
     web_app.run(host="0.0.0.0", port=8080)
 
-# --- Config | الإعدادات ---
+# --- Config | الإعدادات الأساسية ---
 API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
 BOT_TOKEN = "8320774023:AAEgqqEwFCxvs1_vKqhqwtOmq0svd2eB0Yc"
@@ -24,15 +25,18 @@ BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
 CHANNEL_USER = "Fast_Mediia" 
 USERS_FILE = "users_database.txt" 
 
-app = Client("fast_media_final", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("fast_media_v19", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
-# --- دالات النظام ---
+# --- وظائف قاعدة البيانات والاشتراك ---
 def add_user(user_id):
     if not os.path.exists(USERS_FILE): open(USERS_FILE, "w").close()
-    users = open(USERS_FILE, "r").read().splitlines()
-    if str(user_id) not in users:
-        with open(USERS_FILE, "a") as f: f.write(f"{user_id}\n")
+    try:
+        with open(USERS_FILE, "r") as f:
+            users = f.read().splitlines()
+        if str(user_id) not in users:
+            with open(USERS_FILE, "a") as f: f.write(f"{user_id}\n")
+    except: pass
 
 async def check_subscription(client, message):
     try:
@@ -50,11 +54,11 @@ async def check_subscription(client, message):
         return False
     except: return True
 
-# --- شريط التقدم المطور ---
+# --- شريط التقدم السريع ---
 async def progress_bar(current, total, status_msg, start_time):
     now = time.time()
     diff = now - start_time
-    if diff < 1.0: return # تحديث كل ثانية لسرعة الاستجابة
+    if diff < 1.0: return # تحديث كل ثانية لضمان السلاسة
     
     percentage = current * 100 / total
     speed = current / diff
@@ -71,7 +75,7 @@ async def progress_bar(current, total, status_msg, start_time):
     try: await status_msg.edit(tmp)
     except: pass
 
-# --- الأوامر والتعامل مع الرسائل ---
+# --- استقبال الأوامر ---
 @app.on_message(filters.command("start") & filters.private)
 async def start(client, message):
     if not await check_subscription(client, message): return
@@ -104,13 +108,17 @@ async def handle_text(client, message):
         status = await message.reply("🔍 **Analyzing.. جاري المعالجة** ⏳")
         try:
             formats = await asyncio.to_thread(get_all_formats, text)
+            if not formats:
+                await status.edit("❌ **فشل استخراج البيانات. تأكد من الرابط.**")
+                return
+            
             user_cache[user_id] = text
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
             await status.edit("✅ **تم العثور على الجودات:**\nإختر ما تريد تحميله: 👇", reply_markup=InlineKeyboardMarkup(btns))
         except:
-            await status.edit("❌ **حدث خطأ في جلب البيانات من الرابط.**")
+            await status.edit("❌ **خطأ في الرابط أو الموقع غير مدعوم حالياً.**")
 
-# --- معالجة التحميل والرفع ---
+# --- معالجة التحميل (Callback) ---
 @app.on_callback_query()
 async def download_cb(client, callback_query):
     f_id, user_id = callback_query.data, callback_query.from_user.id
@@ -120,33 +128,41 @@ async def download_cb(client, callback_query):
         await callback_query.answer("⚠️ انتهت الجلسة، ارسل الرابط مجدداً", show_alert=True)
         return
     
-    status_msg = await callback_query.message.edit("⚙️ **جاري التحميل من السيرفر...**\n━━━━━━━━━━━━━━━━━━\n📡 **الاتصال:** `Direct Connection` ⚡️")
+    status_msg = await callback_query.message.edit("⚙️ **جاري سحب الملف من المصدر...**\n━━━━━━━━━━━━━━━━━━\n📡 **الوضع:** `Direct High Speed` ⚡️")
     
     is_audio = "audio" in f_id or "bestaudio" in f_id
     file_path = f"media_{user_id}.{'m4a' if is_audio else 'mp4'}"
     
     try:
-        # تحميل الملف للسيرفر أولاً
+        # تحميل الملف إلى سيرفر الاستضافة
         await asyncio.to_thread(run_download, url, f_id, file_path)
         
         if os.path.exists(file_path):
             st_time = time.time()
-            # رفع الملف لتليجرام مع شريط التقدم
+            # رفع الملف إلى تليجرام
             if is_audio:
                 await client.send_audio(user_id, file_path, caption=f"🎵 **By {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st_time))
             else:
                 await client.send_video(user_id, file_path, caption=f"🎬 **By {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st_time))
             
-            # رسالة النجاح النهائية
+            # رسالة النجاح النهائية (مهمة لإشعار المستخدم)
             await client.send_message(user_id, f"✨━━━━━━━━━━━━━✨\n✅ **Mission Completed | تمت المهمة**\n✨━━━━━━━━━━━━━✨\n\n📂 **Status:** `Ready` 🎬\n🚀 **By:** **{BOT_NAME}**")
             await status_msg.delete()
         else:
-            await status_msg.edit("❌ **فشل التحميل، يرجى تجربة جودة أخرى.**")
+            await status_msg.edit("❌ **عذراً، حدث خطأ أثناء تحميل الملف.**")
+            
     except Exception as e:
-        await status_msg.edit(f"❌ **خطأ:** `{str(e)[:100]}`")
+        await status_msg.edit(f"❌ **Error:** `{str(e)[:100]}`")
     finally:
         if os.path.exists(file_path): os.remove(file_path)
 
+# --- التشغيل النهائي (منع التكرار) ---
 if __name__ == "__main__":
-    Thread(target=run_web, daemon=True).start()
+    # تشغيل خادم الويب في Thread مستقل
+    t = Thread(target=run_web)
+    t.daemon = True
+    t.start()
+    
+    # تشغيل البوت في الـ Thread الرئيسي
+    print("🚀 البوت يعمل الآن بنظام النسخة الموحدة...")
     app.run()
