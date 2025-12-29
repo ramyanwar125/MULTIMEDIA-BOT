@@ -3,19 +3,8 @@ from pyrogram import Client, filters
 from pyrogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import UserNotParticipant
 from engine import get_all_formats, run_download
-from flask import Flask
-from threading import Thread
 
-# --- إعداد خادم الويب لمنع توقف البوت ---
-web_app = Flask(__name__)
-@web_app.route('/')
-def home(): return "Bot Status: Running ✅"
-
-def run_web():
-    # استخدام 0.0.0.0 ليتوافق مع Railway و Koyeb
-    web_app.run(host="0.0.0.0", port=8080)
-
-# --- Config | الإعدادات الأساسية ---
+# --- الإعدادات الأساسية ---
 API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
 BOT_TOKEN = "8320774023:AAEgqqEwFCxvs1_vKqhqwtOmq0svd2eB0Yc"
@@ -25,7 +14,7 @@ BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
 CHANNEL_USER = "Fast_Mediia" 
 USERS_FILE = "users_database.txt" 
 
-app = Client("fast_media_v19", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("fast_media_fix", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
 # --- وظائف قاعدة البيانات والاشتراك ---
@@ -58,7 +47,7 @@ async def check_subscription(client, message):
 async def progress_bar(current, total, status_msg, start_time):
     now = time.time()
     diff = now - start_time
-    if diff < 1.0: return # تحديث كل ثانية لضمان السلاسة
+    if diff < 1.0: return 
     
     percentage = current * 100 / total
     speed = current / diff
@@ -75,7 +64,7 @@ async def progress_bar(current, total, status_msg, start_time):
     try: await status_msg.edit(tmp)
     except: pass
 
-# --- استقبال الأوامر ---
+# --- الأوامر ---
 @app.on_message(filters.command("start") & filters.private)
 async def start(client, message):
     if not await check_subscription(client, message): return
@@ -116,9 +105,8 @@ async def handle_text(client, message):
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
             await status.edit("✅ **تم العثور على الجودات:**\nإختر ما تريد تحميله: 👇", reply_markup=InlineKeyboardMarkup(btns))
         except:
-            await status.edit("❌ **خطأ في الرابط أو الموقع غير مدعوم حالياً.**")
+            await status.edit("❌ **خطأ في الرابط أو الموقع غير مدعوم.**")
 
-# --- معالجة التحميل (Callback) ---
 @app.on_callback_query()
 async def download_cb(client, callback_query):
     f_id, user_id = callback_query.data, callback_query.from_user.id
@@ -128,41 +116,31 @@ async def download_cb(client, callback_query):
         await callback_query.answer("⚠️ انتهت الجلسة، ارسل الرابط مجدداً", show_alert=True)
         return
     
-    status_msg = await callback_query.message.edit("⚙️ **جاري سحب الملف من المصدر...**\n━━━━━━━━━━━━━━━━━━\n📡 **الوضع:** `Direct High Speed` ⚡️")
+    status_msg = await callback_query.message.edit("⚙️ **جاري سحب الملف...**\n━━━━━━━━━━━━━━━━━━\n📡 **الوضع:** `Direct Speed` ⚡️")
     
     is_audio = "audio" in f_id or "bestaudio" in f_id
     file_path = f"media_{user_id}.{'m4a' if is_audio else 'mp4'}"
     
     try:
-        # تحميل الملف إلى سيرفر الاستضافة
         await asyncio.to_thread(run_download, url, f_id, file_path)
         
         if os.path.exists(file_path):
             st_time = time.time()
-            # رفع الملف إلى تليجرام
             if is_audio:
                 await client.send_audio(user_id, file_path, caption=f"🎵 **By {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st_time))
             else:
                 await client.send_video(user_id, file_path, caption=f"🎬 **By {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st_time))
             
-            # رسالة النجاح النهائية (مهمة لإشعار المستخدم)
             await client.send_message(user_id, f"✨━━━━━━━━━━━━━✨\n✅ **Mission Completed | تمت المهمة**\n✨━━━━━━━━━━━━━✨\n\n📂 **Status:** `Ready` 🎬\n🚀 **By:** **{BOT_NAME}**")
             await status_msg.delete()
         else:
-            await status_msg.edit("❌ **عذراً، حدث خطأ أثناء تحميل الملف.**")
+            await status_msg.edit("❌ **حدث خطأ أثناء تحميل الملف.**")
             
     except Exception as e:
         await status_msg.edit(f"❌ **Error:** `{str(e)[:100]}`")
     finally:
         if os.path.exists(file_path): os.remove(file_path)
 
-# --- التشغيل النهائي (منع التكرار) ---
 if __name__ == "__main__":
-    # تشغيل خادم الويب في Thread مستقل
-    t = Thread(target=run_web)
-    t.daemon = True
-    t.start()
-    
-    # تشغيل البوت في الـ Thread الرئيسي
-    print("🚀 البوت يعمل الآن بنظام النسخة الموحدة...")
+    print("🚀 البوت يعمل الآن كـ Worker مستقل لمنع التكرار...")
     app.run()
