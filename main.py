@@ -17,7 +17,7 @@ def run_web():
 API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
 # ملاحظة: تأكد أن التوكن أدناه هو الأحدث من BotFather
-BOT_TOKEN = "8304738811:AAHCUi_i6F9j5WWkkn_muwDn-kAx2nOePl0"
+BOT_TOKEN = "8304738811:AAESGIvrYoDYoRjb7hZZURcj-rYTxVGAsYw"
 ADMIN_ID = 7349033289 
 DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
