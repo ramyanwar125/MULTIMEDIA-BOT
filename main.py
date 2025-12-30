@@ -6,8 +6,7 @@ from pyrogram import Client, filters
 from pyrogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import UserNotParticipant
 
-# --- 1. ENGINE SECTION (محرك التحميل) ---
-# يحافظ على ملفات الكوكيز لضمان عدم حظر يوتيوب للبوت
+# --- 1. ENGINE SECTION (المحرك المطور لحل مشكلة الصوت والفيديو) ---
 
 def prepare_engine():
     cookie_file = "cookies_stable.txt"
@@ -23,19 +22,21 @@ def get_all_formats(url):
     ydl_opts = {
         'quiet': True, 
         'cookiefile': prepare_engine(), 
-        'nocheckcertificate': True, 
-        'no_warnings': True
+        'nocheckcertificate': True,
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
         formats_btns = {}
-        # جلب الفيديو المدمج mp4
+        
+        # خيار يحل مشكلة فيسبوك ويوتيوب عبر دمج أفضل فيديو مع أفضل صوت تلقائياً
+        formats_btns["🎬 Best Quality | أفضل جودة"] = "bestvideo+bestaudio/best"
+        
         for f in info.get('formats', []):
             if f.get('vcodec') != 'none' and f.get('acodec') != 'none' and f.get('ext') == 'mp4':
                 res = f.get('height')
                 if res: 
-                    formats_btns[f"🎬 {res}p"] = f.get('format_id')
-        # إضافة خيار الصوت
+                    formats_btns[f"🎬 {res}p (MP4)"] = f.get('format_id')
+        
         formats_btns["🎶 Audio | تحميل صوت"] = "bestaudio[ext=m4a]/bestaudio"
         return formats_btns
 
@@ -46,18 +47,16 @@ def run_download(url, format_id, file_path):
         'cookiefile': 'cookies_stable.txt',
         'nocheckcertificate': True,
         'quiet': True,
-        'concurrent_fragment_downloads': 15, # سرعة قصوى للتحميل
-        'continuedl': True,
-        'buffersize': 1024 * 1024
+        'merge_output_format': 'mp4', # لضمان دمج الصوت والفيديو في ملف واحد
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
 
-# --- 2. BOT SECTION (برمجة البوت) ---
+# --- 2. BOT SECTION (الإعدادات مع التوكن الجديد) ---
 
-# سيقوم Koyeb بقراءة هذه القيم من Environment Variables التي ستضيفها أنت
 API_ID = int(os.environ.get("API_ID", 33536164))
 API_HASH = os.environ.get("API_HASH", "c4f81cfa1dc011bcf66c6a4a58560fd2")
+# تم وضع التوكن الجديد هنا كما طلبت
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8320774023:AAG1GnYaaZsPfItMUGgzQvAmVPpk-GDHT0w")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", 7349033289))
 DEV_USER = "@TOP_1UP"
@@ -124,7 +123,7 @@ async def start(client, message):
         f"  🙋‍♂️ Welcome | أهلاً بك يا **{message.from_user.first_name}**\n"
         f"  🌟 In **{BOT_NAME}** World\n"
         f"✨━━━━━━━━━━━━━✨\n\n"
-        f"🚀 **Fast Downloader for | بوت تحميل سريع:**\n"
+        f"🚀 **Fast Downloader for:**\n"
         f"📹 YouTube | 📸 Instagram | 🎵 TikTok\n"
         f"👻 Snapchat | 🔵 Facebook\n\n"
         f"👇 **Send link now! | أرسل الرابط الآن!**"
@@ -137,7 +136,7 @@ async def handle_text(client, message):
     text, user_id = message.text, message.from_user.id
     
     if text == '🔄 Restart Service | بدء الخدمة':
-        await message.reply("📡 **System Ready.. النظام جاهز!** ⚡️")
+        await message.reply("📡 **System Ready..** ⚡️")
         return
     
     if text == '👨‍💻 Developer | المطور':
@@ -147,7 +146,7 @@ async def handle_text(client, message):
         return
 
     if text == '📣 Broadcast | إذاعة' and user_id == ADMIN_ID:
-        await message.reply("📥 **Send your message | أرسل رسالة الإذاعة:**")
+        await message.reply("📥 **Send your message:**")
         user_cache[f"bc_{user_id}"] = True
         return
 
@@ -156,27 +155,27 @@ async def handle_text(client, message):
         for u in users:
             try: await message.copy(int(u))
             except: pass
-        await message.reply("✅ **Broadcast Sent | تمت الإذاعة**")
+        await message.reply("✅ **Broadcast Sent**")
         user_cache[f"bc_{user_id}"] = False
         return
 
     if "http" in text:
-        status = await message.reply("🔍 **Analyzing.. جاري المعالجة** ⏳")
+        status = await message.reply("🔍 **Analyzing..** ⏳")
         try:
             formats = await asyncio.to_thread(get_all_formats, text)
             user_cache[user_id] = text
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
-            await status.edit("✅ **Formats Found | تم الاستخراج**\nChoose your option: 👇", reply_markup=InlineKeyboardMarkup(btns))
-        except: await status.edit("❌ **Error | فشل المعالجة**")
+            await status.edit("✅ **Formats Found**\nChoose your option: 👇", reply_markup=InlineKeyboardMarkup(btns))
+        except Exception as e: 
+            await status.edit(f"❌ **Error:** {str(e)[:50]}")
 
 @app.on_callback_query()
 async def download_cb(client, callback_query):
     f_id, user_id = callback_query.data, callback_query.from_user.id
     url = user_cache.get(user_id)
-    if not url:
-        await callback_query.answer("⚠️ Session Expired", show_alert=True); return
+    if not url: return
     
-    await callback_query.message.edit("⚙️ **Processing.. جاري التنفيذ**\n━━━━━━━━━━━━━━━━━━\n📡 **Status:** `Direct Connection` ⚡️\n⏳ **Please wait.. يرجى الانتظار**")
+    await callback_query.message.edit("⚙️ **Processing...**\n📡 **Status:** `Direct Connection` ⚡️")
     is_audio = "audio" in f_id
     file_path = f"media_{user_id}.{'m4a' if is_audio else 'mp4'}"
     
@@ -185,13 +184,12 @@ async def download_cb(client, callback_query):
         if os.path.exists(file_path):
             st = time.time()
             if is_audio: 
-                await client.send_audio(user_id, file_path, caption=f"🎵 **Audio by {BOT_NAME}**", progress=progress_bar, progress_args=(callback_query.message, st))
+                await client.send_audio(user_id, file_path, caption=f"🎵 **By {BOT_NAME}**", progress=progress_bar, progress_args=(callback_query.message, st))
             else: 
-                await client.send_video(user_id, file_path, caption=f"🎬 **Video by {BOT_NAME}**", progress=progress_bar, progress_args=(callback_query.message, st))
-            await client.send_message(user_id, f"✨━━━━━━━━━━━━━✨\n✅ **Mission Completed | تمت المهمة**\n✨━━━━━━━━━━━━━✨\n\n📂 **Status:** `Ready` 🎬\n🚀 **By:** **{BOT_NAME}**")
+                await client.send_video(user_id, file_path, caption=f"🎬 **By {BOT_NAME}**", progress=progress_bar, progress_args=(callback_query.message, st), supports_streaming=True)
             await callback_query.message.delete()
     except Exception as e: 
-        await callback_query.message.edit(f"❌ **Failed:** {e}")
+        await callback_query.message.edit(f"❌ **Download Error:** {str(e)[:100]}")
     finally: 
         if os.path.exists(file_path): os.remove(file_path)
 
