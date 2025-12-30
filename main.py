@@ -7,7 +7,7 @@ from pyrogram import Client, filters, idle
 from pyrogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import UserNotParticipant, FloodWait
 
-# --- 1. ENGINE SECTION (المحرك المطور) ---
+# --- 1. ENGINE SECTION (المحرك المطور لدمج الصوت والفيديو) ---
 
 def prepare_engine():
     cookie_file = "cookies_stable.txt"
@@ -25,6 +25,7 @@ def get_all_formats(url):
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
         formats_btns = {}
+        # الخيار السحري: دمج أفضل فيديو مع أفضل صوت (يحل مشكلة الفيسبوك)
         formats_btns["🎬 Best Quality | أفضل جودة"] = "bestvideo+bestaudio/best"
         
         for f in info.get('formats', []):
@@ -42,26 +43,28 @@ def run_download(url, format_id, file_path):
         'cookiefile': 'cookies_stable.txt',
         'nocheckcertificate': True,
         'quiet': True,
-        'merge_output_format': 'mp4', 
+        'merge_output_format': 'mp4', # ضروري لدمج الصوت والفيديو في ملف واحد
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
 
-# --- 2. BOT SECTION ---
+# --- 2. BOT SECTION (الإعدادات) ---
 
 API_ID = int(os.environ.get("API_ID", 33536164))
 API_HASH = os.environ.get("API_HASH", "c4f81cfa1dc011bcf66c6a4a58560fd2")
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8320774023:AAHtxSIqRsXQR3GGitkpkWjquH3t-fOk2MQ")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8320774023:AAGvIfzV2k34KK2GDAlP5vNIZXrCvN3j0p8")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", 7349033289))
 
-# تم تغيير اسم الجلسة لتجنب مشاكل الاتصال العالقة
-app = Client("fast_media_fixed_v1", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+# تغيير اسم الجلسة لضمان بدء اتصال جديد تماماً
+app = Client("fast_media_v21_final", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+
 user_cache = {}
 USERS_FILE = "users_database.txt"
 CHANNEL_USER = "Fast_Mediia"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
 DEV_USER = "@TOP_1UP"
 
+# (دوال المساعدة: قاعدة البيانات، الاشتراك، شريط التحميل)
 def add_user(user_id):
     if not os.path.exists(USERS_FILE): open(USERS_FILE, "w").close()
     users = open(USERS_FILE, "r").read().splitlines()
@@ -72,11 +75,10 @@ async def check_subscription(client, message):
     try:
         await client.get_chat_member(CHANNEL_USER, message.from_user.id)
         return True
-    except UserNotParticipant:
+    except:
         await message.reply(f"⚠️ اشترك في القناة أولاً: @{CHANNEL_USER}", 
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ اشترك الآن", url=f"https://t.me/{CHANNEL_USER}")]]))
         return False
-    except: return True
 
 async def progress_bar(current, total, status_msg, start_time):
     now = time.time()
@@ -120,27 +122,27 @@ async def download_cb(client, callback_query):
         if "audio" in f_id:
             await client.send_audio(user_id, file_path, progress=progress_bar, progress_args=(callback_query.message, st))
         else:
-            await client.send_video(user_id, file_path, progress=progress_bar, progress_args=(callback_query.message, st))
+            await client.send_video(user_id, file_path, progress=progress_bar, progress_args=(callback_query.message, st), supports_streaming=True)
         await callback_query.message.delete()
     except Exception as e: await callback_query.message.edit(f"❌ خطأ: {str(e)[:100]}")
     finally:
         if os.path.exists(file_path): os.remove(file_path)
 
-# --- 3. THE FINAL FIX: معالجة الحظر والبدء النظيف ---
+# --- 3. THE FINAL FIX: منع التكرار ومعالجة الحظر ---
 async def main():
     try:
         await app.start()
-        # تصحيح دالة الـ Webhook لمسح التكرار
+        # أهم سطرين لمنع التكرار: مسح التحديثات القديمة وإغلاق الويب هوك
+        await app.set_webhook(drop_pending_updates=True)
         try:
-            await app.set_webhook(drop_pending_updates=True)
             await app.stop_webhook()
         except:
             pass
-        print("✅ البوت يعمل الآن بنسخة واحدة فقط...")
+        print("✅ البوت يعمل الآن بنسخة واحدة ونظيفة!")
         await idle()
         await app.stop()
     except FloodWait as e:
-        print(f"⚠️ حظر من تليجرام! سننتظر {e.value} ثانية...")
+        print(f"⚠️ حظر مؤقت! سننتظر {e.value} ثانية...")
         await asyncio.sleep(e.value)
         await main()
 
