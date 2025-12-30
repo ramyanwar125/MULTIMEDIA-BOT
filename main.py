@@ -7,6 +7,7 @@ from pyrogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyb
 from pyrogram.errors import UserNotParticipant
 
 # --- 1. ENGINE SECTION (محرك التحميل) ---
+# يحافظ على ملفات الكوكيز لضمان عدم حظر يوتيوب للبوت
 
 def prepare_engine():
     cookie_file = "cookies_stable.txt"
@@ -45,7 +46,7 @@ def run_download(url, format_id, file_path):
         'cookiefile': 'cookies_stable.txt',
         'nocheckcertificate': True,
         'quiet': True,
-        'concurrent_fragment_downloads': 15, # سرعة قصوى
+        'concurrent_fragment_downloads': 15, # سرعة قصوى للتحميل
         'continuedl': True,
         'buffersize': 1024 * 1024
     }
@@ -54,7 +55,7 @@ def run_download(url, format_id, file_path):
 
 # --- 2. BOT SECTION (برمجة البوت) ---
 
-# الإعدادات - يتم جلبها من البيئة أو استخدام القيم الافتراضية التي زودتني بها
+# سيقوم Koyeb بقراءة هذه القيم من Environment Variables التي ستضيفها أنت
 API_ID = int(os.environ.get("API_ID", 33536164))
 API_HASH = os.environ.get("API_HASH", "c4f81cfa1dc011bcf66c6a4a58560fd2")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8320774023:AAG2YCeBsEew587TQoXBTnBQgBQgvLbI7p8")
