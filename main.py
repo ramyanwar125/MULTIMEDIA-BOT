@@ -57,7 +57,7 @@ def run_download(url, format_id, file_path):
 API_ID = int(os.environ.get("API_ID", 33536164))
 API_HASH = os.environ.get("API_HASH", "c4f81cfa1dc011bcf66c6a4a58560fd2")
 # تم وضع التوكن الجديد هنا كما طلبت
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8320774023:AAFgdqNId2o1hkrfZEPdpMjKUb_Mqo11BmA")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8320774023:AAG0qEoBHD7ytI4AUiBu_C_Ox0--LHsvuGA")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", 7349033289))
 DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
