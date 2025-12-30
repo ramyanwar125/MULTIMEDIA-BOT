@@ -1,91 +1,73 @@
-import os
-import asyncio
-import time
-import yt_dlp
-import pyrogram
-from pyrogram import Client, filters, idle
+import os, asyncio, time, threading
+from pyrogram import Client, filters
 from pyrogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
-from pyrogram.errors import UserNotParticipant, FloodWait
+from pyrogram.errors import UserNotParticipant
+from engine import get_all_formats, run_download
+from flask import Flask
 
-# --- 1. ENGINE SECTION (المحرك المطور لدمج الصوت والفيديو) ---
+# --- Flask Server لضمان عمل ريندر ---
+web_app = Flask(__name__)
+@web_app.route('/')
+def home(): return "Bot is Running!"
 
-def prepare_engine():
-    cookie_file = "cookies_stable.txt"
-    if not os.path.exists(cookie_file):
-        with open(cookie_file, "w") as f:
-            f.write("# Netscape HTTP Cookie File\n")
-    return cookie_file
+def run_web():
+    web_app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
 
-def get_all_formats(url):
-    ydl_opts = {
-        'quiet': True, 
-        'cookiefile': prepare_engine(), 
-        'nocheckcertificate': True,
-    }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        formats_btns = {}
-        # الخيار السحري: دمج أفضل فيديو مع أفضل صوت (يحل مشكلة الفيسبوك)
-        formats_btns["🎬 Best Quality | أفضل جودة"] = "bestvideo+bestaudio/best"
-        
-        for f in info.get('formats', []):
-            if f.get('vcodec') != 'none' and f.get('acodec') != 'none' and f.get('ext') == 'mp4':
-                res = f.get('height')
-                if res: formats_btns[f"🎬 {res}p (MP4)"] = f.get('format_id')
-        
-        formats_btns["🎶 Audio | تحميل صوت"] = "bestaudio[ext=m4a]/bestaudio"
-        return formats_btns
-
-def run_download(url, format_id, file_path):
-    ydl_opts = {
-        'outtmpl': file_path,
-        'format': format_id,
-        'cookiefile': 'cookies_stable.txt',
-        'nocheckcertificate': True,
-        'quiet': True,
-        'merge_output_format': 'mp4', # ضروري لدمج الصوت والفيديو في ملف واحد
-    }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
-
-# --- 2. BOT SECTION (الإعدادات) ---
-
-API_ID = int(os.environ.get("API_ID", 33536164))
-API_HASH = os.environ.get("API_HASH", "c4f81cfa1dc011bcf66c6a4a58560fd2")
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8320774023:AAGvIfzV2k34KK2GDAlP5vNIZXrCvN3j0p8")
-ADMIN_ID = int(os.environ.get("ADMIN_ID", 7349033289))
-
-# تغيير اسم الجلسة لضمان بدء اتصال جديد تماماً
-app = Client("fast_media_v21_final", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
-
-user_cache = {}
-USERS_FILE = "users_database.txt"
-CHANNEL_USER = "Fast_Mediia"
-BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
+# --- Config | الإعدادات ---
+API_ID = 33536164
+API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
+BOT_TOKEN = "8320774023:AAE4-aUhl5K0V60lOTYRHk5TLKRbiyVjNIg"
+ADMIN_ID = 7349033289 
 DEV_USER = "@TOP_1UP"
+BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
+CHANNEL_USER = "Fast_Mediia" 
+USERS_FILE = "users_database.txt" 
 
-# (دوال المساعدة: قاعدة البيانات، الاشتراك، شريط التحميل)
+app = Client("fast_media_v19", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+user_cache = {}
+
 def add_user(user_id):
     if not os.path.exists(USERS_FILE): open(USERS_FILE, "w").close()
     users = open(USERS_FILE, "r").read().splitlines()
     if str(user_id) not in users:
         with open(USERS_FILE, "a") as f: f.write(f"{user_id}\n")
 
+def get_users_count():
+    if not os.path.exists(USERS_FILE): return 0
+    return len(open(USERS_FILE, "r").read().splitlines())
+
 async def check_subscription(client, message):
     try:
         await client.get_chat_member(CHANNEL_USER, message.from_user.id)
         return True
-    except:
-        await message.reply(f"⚠️ اشترك في القناة أولاً: @{CHANNEL_USER}", 
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✅ اشترك الآن", url=f"https://t.me/{CHANNEL_USER}")]]))
+    except UserNotParticipant:
+        await message.reply(
+            f"⚠️ **عذراً، يجب عليك الاشتراك في القناة أولاً!**\n\n"
+            f"قناة البوت: @{CHANNEL_USER}\n"
+            f"بعد الاشتراك، أرسل /start مجدداً.",
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("✅ Join Channel | اشترك الآن", url=f"https://t.me/{CHANNEL_USER}")
+            ]])
+        )
         return False
+    except Exception: return True
 
 async def progress_bar(current, total, status_msg, start_time):
     now = time.time()
-    if now - start_time < 2.5: return
+    diff = now - start_time
+    if diff < 2.5: return
     percentage = current * 100 / total
+    speed = current / diff
     bar = "▬" * int(percentage // 10) + "▭" * (10 - int(percentage // 10))
-    try: await status_msg.edit(f"🚀 جاري النقل: {percentage:.1f}%\n`{bar}`")
+    tmp = (
+        f"🚀 **Transferring.. جاري النقل**\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"◈ **Progress:** `{bar}` **{percentage:.1f}%**\n"
+        f"◈ **Speed:** `{speed/(1024*1024):.2f} MB/s` ⚡️\n"
+        f"◈ **Size:** `{current/(1024*1024):.1f}` / `{total/(1024*1024):.1f} MB`\n\n"
+        f"━━━━━━━━━━━━━━━━━━"
+    )
+    try: await status_msg.edit(tmp)
     except: pass
 
 @app.on_message(filters.command("start") & filters.private)
@@ -94,58 +76,81 @@ async def start(client, message):
     add_user(message.from_user.id)
     kb = [['🔄 Restart Service | بدء الخدمة'], ['👨‍💻 Developer | المطور']]
     if message.from_user.id == ADMIN_ID: kb[1].append('📣 Broadcast | إذاعة')
-    await message.reply(f"🙋‍♂️ أهلاً بك في {BOT_NAME}\nأرسل الرابط الآن!", reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True))
+    
+    welcome_text = (
+        f"✨━━━━━━━━━━━━━✨\n"
+        f"  🙋‍♂️ Welcome | أهلاً بك يا **{message.from_user.first_name}**\n"
+        f"  🌟 In **{BOT_NAME}** World\n"
+        f"✨━━━━━━━━━━━━━✨\n\n"
+        f"🚀 **Fast Downloader for | بوت تحميل سريع:**\n"
+        f"📹 YouTube | 📸 Instagram | 🎵 TikTok\n"
+        f"👻 Snapchat | 🔵 Facebook\n\n"
+        f"👇 **Send link now! | أرسل الرابط الآن!**"
+    )
+    await message.reply(welcome_text, reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True))
 
 @app.on_message(filters.text & filters.private)
 async def handle_text(client, message):
     if not await check_subscription(client, message): return
     text, user_id = message.text, message.from_user.id
+    
+    if text == '🔄 Restart Service | بدء الخدمة':
+        await message.reply("📡 **System Ready.. النظام جاهز!** ⚡️")
+        return
+    
+    if text == '👨‍💻 Developer | المطور':
+        msg = f"👑 **Main Developer:** {DEV_USER}\n📢 **Our Channel:** @{CHANNEL_USER}\n"
+        if user_id == ADMIN_ID: msg += f"📊 **Total Users:** `{get_users_count()}`"
+        await message.reply(msg)
+        return
+
+    if text == '📣 Broadcast | إذاعة' and user_id == ADMIN_ID:
+        await message.reply("📥 **Send your message | أرسل رسالة الإذاعة:**")
+        user_cache[f"bc_{user_id}"] = True
+        return
+
+    if user_cache.get(f"bc_{user_id}"):
+        users = open(USERS_FILE).read().splitlines()
+        for u in users:
+            try: await message.copy(int(u))
+            except: pass
+        await message.reply("✅ **Broadcast Sent | تمت الإذاعة**")
+        user_cache[f"bc_{user_id}"] = False
+        return
+
     if "http" in text:
-        status = await message.reply("🔍 جاري التحليل..")
+        status = await message.reply("🔍 **Analyzing.. جاري المعالجة** ⏳")
         try:
             formats = await asyncio.to_thread(get_all_formats, text)
             user_cache[user_id] = text
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
-            await status.edit("✅ اختر الجودة المطلوبة:", reply_markup=InlineKeyboardMarkup(btns))
-        except Exception as e: await status.edit(f"❌ خطأ: {str(e)[:50]}")
+            await status.edit("✅ **Formats Found | تم الاستخراج**\nChoose your option: 👇", reply_markup=InlineKeyboardMarkup(btns))
+        except: await status.edit("❌ **Error | فشل المعالجة**")
 
 @app.on_callback_query()
 async def download_cb(client, callback_query):
     f_id, user_id = callback_query.data, callback_query.from_user.id
     url = user_cache.get(user_id)
-    if not url: return
-    await callback_query.message.edit("⚙️ جاري التحميل والدمج...")
-    file_path = f"media_{user_id}.{'m4a' if 'audio' in f_id else 'mp4'}"
+    if not url:
+        await callback_query.answer("⚠️ Session Expired", show_alert=True); return
+    
+    await callback_query.message.edit("⚙️ **Processing.. جاري التنفيذ**\n━━━━━━━━━━━━━━━━━━\n📡 **Status:** `Direct Connection` ⚡️\n⏳ **Please wait.. يرجى الانتظار**")
+    is_audio = "audio" in f_id
+    file_path = f"media_{user_id}.{'m4a' if is_audio else 'mp4'}"
+    
     try:
         await asyncio.to_thread(run_download, url, f_id, file_path)
-        st = time.time()
-        if "audio" in f_id:
-            await client.send_audio(user_id, file_path, progress=progress_bar, progress_args=(callback_query.message, st))
-        else:
-            await client.send_video(user_id, file_path, progress=progress_bar, progress_args=(callback_query.message, st), supports_streaming=True)
-        await callback_query.message.delete()
-    except Exception as e: await callback_query.message.edit(f"❌ خطأ: {str(e)[:100]}")
-    finally:
+        if os.path.exists(file_path):
+            st = time.time()
+            if is_audio: await client.send_audio(user_id, file_path, caption=f"🎵 **Audio by {BOT_NAME}**", progress=progress_bar, progress_args=(callback_query.message, st))
+            else: await client.send_video(user_id, file_path, caption=f"🎬 **Video by {BOT_NAME}**", progress=progress_bar, progress_args=(callback_query.message, st))
+            await client.send_message(user_id, f"✨━━━━━━━━━━━━━✨\n✅ **Mission Completed | تمت المهمة**\n✨━━━━━━━━━━━━━✨\n\n📂 **Status:** `Ready` 🎬\n🚀 **By:** **{BOT_NAME}**")
+            await callback_query.message.delete()
+    except Exception as e: await callback_query.message.edit(f"❌ **Failed:** {e}")
+    finally: 
         if os.path.exists(file_path): os.remove(file_path)
 
-# --- 3. THE FINAL FIX: منع التكرار ومعالجة الحظر ---
-async def main():
-    try:
-        await app.start()
-        # أهم سطرين لمنع التكرار: مسح التحديثات القديمة وإغلاق الويب هوك
-        await app.set_webhook(drop_pending_updates=True)
-        try:
-            await app.stop_webhook()
-        except:
-            pass
-        print("✅ البوت يعمل الآن بنسخة واحدة ونظيفة!")
-        await idle()
-        await app.stop()
-    except FloodWait as e:
-        print(f"⚠️ حظر مؤقت! سننتظر {e.value} ثانية...")
-        await asyncio.sleep(e.value)
-        await main()
-
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    # تشغيل السيرفر في خلفية منفصلة
+    threading.Thread(target=run_web, daemon=True).start()
+    app.run()
