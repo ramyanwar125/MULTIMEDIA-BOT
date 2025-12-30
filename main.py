@@ -2,9 +2,10 @@ import os
 import asyncio
 import time
 import yt_dlp
+import pyrogram
 from pyrogram import Client, filters, idle
 from pyrogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
-from pyrogram.errors import UserNotParticipant
+from pyrogram.errors import UserNotParticipant, FloodWait
 
 # --- 1. ENGINE SECTION (المحرك المطور) ---
 
@@ -24,7 +25,6 @@ def get_all_formats(url):
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
         formats_btns = {}
-        # دمج أفضل فيديو مع أفضل صوت (يحل مشكلة الفيسبوك)
         formats_btns["🎬 Best Quality | أفضل جودة"] = "bestvideo+bestaudio/best"
         
         for f in info.get('formats', []):
@@ -49,20 +49,19 @@ def run_download(url, format_id, file_path):
 
 # --- 2. BOT SECTION ---
 
-# جلب البيانات من Environment Variables في Koyeb
 API_ID = int(os.environ.get("API_ID", 33536164))
 API_HASH = os.environ.get("API_HASH", "c4f81cfa1dc011bcf66c6a4a58560fd2")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "8320774023:AAHtxSIqRsXQR3GGitkpkWjquH3t-fOk2MQ")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", 7349033289))
 
-app = Client("fast_media_v19", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+# تم تغيير اسم الجلسة لتجنب مشاكل الاتصال العالقة
+app = Client("fast_media_fixed_v1", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 USERS_FILE = "users_database.txt"
 CHANNEL_USER = "Fast_Mediia"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
 DEV_USER = "@TOP_1UP"
 
-# (دوال المساعدة: الاشتراك، قاعدة البيانات، شريط التحميل - تبقى كما هي في كودك)
 def add_user(user_id):
     if not os.path.exists(USERS_FILE): open(USERS_FILE, "w").close()
     users = open(USERS_FILE, "r").read().splitlines()
@@ -127,14 +126,24 @@ async def download_cb(client, callback_query):
     finally:
         if os.path.exists(file_path): os.remove(file_path)
 
-# --- 3. THE FIX: منع التكرار نهائياً ---
+# --- 3. THE FINAL FIX: معالجة الحظر والبدء النظيف ---
 async def main():
-    await app.start()
-    # مسح أي رسائل قديمة كانت عالقة وتسببت في التكرار
-    await app.delete_web_hook(drop_pending_updates=True)
-    print("✅ البوت يعمل الآن بنسخة واحدة فقط...")
-    await idle()
-    await app.stop()
+    try:
+        await app.start()
+        # تصحيح دالة الـ Webhook لمسح التكرار
+        try:
+            await app.set_webhook(drop_pending_updates=True)
+            await app.stop_webhook()
+        except:
+            pass
+        print("✅ البوت يعمل الآن بنسخة واحدة فقط...")
+        await idle()
+        await app.stop()
+    except FloodWait as e:
+        print(f"⚠️ حظر من تليجرام! سننتظر {e.value} ثانية...")
+        await asyncio.sleep(e.value)
+        await main()
 
 if __name__ == "__main__":
-    asyncio.get_event_loop().run_until_complete(main())
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
