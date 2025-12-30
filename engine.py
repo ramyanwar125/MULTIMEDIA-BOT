@@ -3,7 +3,6 @@ import yt_dlp
 import re
 
 def prepare_engine():
-    """تهيئة ملف الكوكيز لضمان عدم حظر الطلبات"""
     cookie_file = "cookies_stable.txt"
     if not os.path.exists(cookie_file):
         with open(cookie_file, "w") as f:
@@ -11,12 +10,11 @@ def prepare_engine():
     return cookie_file
 
 def get_all_formats(url):
-    """استخراج جميع جودات الفيديو التي تحتوي على صوت وصورة معاً"""
     ydl_opts = {
         'quiet': True, 
         'cookiefile': prepare_engine(), 
         'nocheckcertificate': True,
-        'no_warnings': True,
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -25,43 +23,36 @@ def get_all_formats(url):
             all_formats = info.get('formats', [])
             
             for f in all_formats:
-                # الشرط الأساسي: وجود فيديو وصوت في نفس الملف
+                # فلتر لجلب الجودات التي تحتوي فيديو وصوت معاً لفيسبوك
                 if f.get('vcodec') != 'none' and f.get('acodec') != 'none':
                     res = f.get('height')
                     if res:
                         label = f"🎬 {res}p"
                         formats_btns[label] = f.get('format_id')
             
-            # دالة لاستخراج الرقم من النص للترتيب (مثلاً 720 من "720p")
+            if not formats_btns: # محاولة إضافية إذا لم يجد جودات مرقمة
+                formats_btns["🎬 Best Quality"] = "best"
+
             def extract_res(label):
                 nums = re.findall(r'\d+', label)
                 return int(nums[0]) if nums else 0
 
-            # ترتيب الجودات من الأعلى (1080, 720...) إلى الأقل
-            sorted_keys = sorted(formats_btns.keys(), key=extract_res, reverse=True)
-            final_formats = {k: formats_btns[k] for k in sorted_keys}
-            
-            # إضافة خيار الصوت فقط في النهاية لمن يحتاجه
-            final_formats["🎶 Audio | تحميل صوت"] = "bestaudio[ext=m4a]/bestaudio"
-            
+            sorted_labels = sorted(formats_btns.keys(), key=extract_res, reverse=True)
+            final_formats = {label: formats_btns[label] for label in sorted_labels}
+            final_formats["🎶 Audio | تحميل صوت"] = "bestaudio"
             return final_formats
     except Exception as e:
-        print(f"حدث خطأ أثناء جلب الجودات: {e}")
+        print(f"Error in engine: {e}")
         return {}
 
 def run_download(url, format_id, file_path):
-    """بدء عملية التحميل للجودة المختارة"""
     ydl_opts = {
         'outtmpl': file_path,
-        'format': format_id,
+        'format': f"{format_id}+bestaudio/best",
         'cookiefile': 'cookies_stable.txt',
         'nocheckcertificate': True,
-        'quiet': False, # جعلناه False لتتمكن من رؤية التقدم في الشاشة
+        'quiet': True,
+        'merge_output_format': 'mp4',
     }
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-            return True
-    except Exception as e:
-        print(f"حدث خطأ أثناء التحميل: {e}")
-        return False
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])
