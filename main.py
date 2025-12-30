@@ -1,4 +1,7 @@
-import os, asyncio, time, threading
+IMr0"
+ADMIN_ID = 7349033289 
+DEV_USERMfksteOCl5CcHV57BoK5IMr0"
+ADMINJv os, asyncio, time, threading
 from pyrogram import Client, filters
 from pyrogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import UserNotParticipant
@@ -16,7 +19,7 @@ def run_web():
 # --- Config | الإعدادات ---
 API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
-BOT_TOKEN = "8304738811:AAHRKdJv8pHMfksteOCl5CcHV57BoK5IMr0"
+BOT_TOKEN = "8304738811:AAFSzPbVzT6uT6HfexDHVjtj4iqvm3SRsOc"
 ADMIN_ID = 7349033289 
 DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
