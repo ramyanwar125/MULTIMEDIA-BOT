@@ -16,7 +16,7 @@ def run_web():
 # --- Config | الإعدادات ---
 API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
-BOT_TOKEN = "8320774023:AAH-GdXQBBkauTQCo0FGNalFzu1H63eRjok"
+BOT_TOKEN = "8320774023:AAFIDj-qEI84F1bbw8gdGD3umoztuov1Xvk"
 ADMIN_ID = 7349033289 
 DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
