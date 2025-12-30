@@ -21,7 +21,7 @@ def run_health_check_server():
 # --- Config | الإعدادات ---
 API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
-BOT_TOKEN = "8304738811:AAGZxm2ronIjAUjNQbIdSIt5J2PN9p7cub4"
+BOT_TOKEN = "8304738811:AAGplcj8YkZcmaY32zNifkraNWSLU5MWrgI"
 ADMIN_ID = 7349033289 
 DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
@@ -86,6 +86,10 @@ def add_user(user_id):
     if str(user_id) not in users:
         with open(USERS_FILE, "a") as f: f.write(f"{user_id}\n")
 
+def get_users_count():
+    if not os.path.exists(USERS_FILE): return 0
+    return len(open(USERS_FILE, "r").read().splitlines())
+
 async def progress_bar(current, total, status_msg, start_time):
     now = time.time()
     diff = now - start_time
@@ -106,41 +110,101 @@ async def progress_bar(current, total, status_msg, start_time):
 @app.on_message(filters.command("start") & filters.private)
 async def start(client, message):
     add_user(message.from_user.id)
+    # الأزرار الأساسية
     kb = [['🔄 Restart Service | بدء الخدمة'], ['👨‍💻 Developer | المطور']]
-    welcome_text = (f"✨━━━━━━━━━━━━━✨\n  🙋‍♂️ أهلاً بك يا **{message.from_user.first_name}**\n  🌟 في بوت **{BOT_NAME}**\n✨━━━━━━━━━━━━━✨\n\n👇 **أرسل الرابط الآن للتحميل!**")
+    # إضافة زر الإذاعة للمطور فقط
+    if message.from_user.id == ADMIN_ID:
+        kb.append(['📣 Broadcast | إذاعة'])
+    
+    welcome_text = (
+        f"✨━━━━━━━━━━━━━✨\n"
+        f"  🙋‍♂️ Welcome | أهلاً بك يا **{message.from_user.first_name}**\n"
+        f"  🌟 In **{BOT_NAME}** World\n"
+        f"✨━━━━━━━━━━━━━✨\n\n"
+        f"🚀 **Fast Downloader for | بوت تحميل سريع:**\n"
+        f"📹 YouTube | 📸 Instagram | 🎵 TikTok\n"
+        f"👻 Snapchat | 🔵 Facebook\n\n"
+        f"👇 **Send link now! | أرسل الرابط الآن!**"
+    )
     await message.reply(welcome_text, reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True))
 
 @app.on_message(filters.text & filters.private)
 async def handle_text(client, message):
     text, user_id = message.text, message.from_user.id
+    
+    if text == '🔄 Restart Service | بدء الخدمة':
+        await message.reply("📡 **System Ready.. النظام جاهز!** ⚡️")
+        return
+    
+    if text == '👨‍💻 Developer | المطور':
+        msg = f"👑 **Main Developer:** {DEV_USER}\n📢 **Our Channel:** @{CHANNEL_USER}\n"
+        if user_id == ADMIN_ID:
+            msg += f"📊 **Total Users:** `{get_users_count()}`"
+        await message.reply(msg)
+        return
+
+    if text == '📣 Broadcast | إذاعة' and user_id == ADMIN_ID:
+        await message.reply("📥 **Send your message | أرسل رسالة الإذاعة:**")
+        user_cache[f"bc_{user_id}"] = True
+        return
+
+    if user_cache.get(f"bc_{user_id}"):
+        users = open(USERS_FILE).read().splitlines()
+        for u in users:
+            try: await message.copy(int(u))
+            except: pass
+        await message.reply("✅ **Broadcast Sent | تمت الإذاعة**")
+        user_cache[f"bc_{user_id}"] = False
+        return
+
     if "http" in text:
         status = await message.reply("🔍 **Analyzing.. جاري المعالجة** ⏳")
         try:
             formats = await asyncio.to_thread(get_all_formats, text)
             user_cache[user_id] = text
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
-            await status.edit("✅ **تم استخراج الجودات:**", reply_markup=InlineKeyboardMarkup(btns))
-        except: await status.edit("❌ **خطأ في الرابط أو الموقع غير مدعوم**")
+            await status.edit("✅ **Formats Found | تم الاستخراج**\nChoose your option: 👇", reply_markup=InlineKeyboardMarkup(btns))
+        except: await status.edit("❌ **Error | فشل المعالجة**")
 
 @app.on_callback_query()
 async def download_cb(client, callback_query):
     f_id, user_id = callback_query.data, callback_query.from_user.id
     url = user_cache.get(user_id)
-    status_msg = await callback_query.message.edit("⚙️ **جاري التحميل...**")
-    file_path = f"media_{user_id}.mp4"
+    if not url:
+        await callback_query.answer("⚠️ Session Expired", show_alert=True); return
+    
+    status_msg = await callback_query.message.edit("⚙️ **Processing.. جاري التنفيذ**")
+    is_audio = "audio" in f_id
+    file_path = f"media_{user_id}.{'m4a' if is_audio else 'mp4'}"
+    
     try:
         await asyncio.to_thread(run_download, url, f_id, file_path)
         if os.path.exists(file_path):
             st = time.time()
-            await client.send_video(user_id, file_path, caption=f"🎬 **By {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st))
-            thanks_text = (f"✨ **تمت المهمة بنجاح** ✨\n━━━━━━━━━━━━\n👨‍💻 **Dev:** {DEV_USER}\n📢 **Channel:** @{CHANNEL_USER}")
+            if is_audio: 
+                await client.send_audio(user_id, file_path, caption=f"🎵 **Audio by {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st))
+            else: 
+                await client.send_video(user_id, file_path, caption=f"🎬 **Video by {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st))
+            
+            # --- رسالة الشكر الاحترافية مع معرف المطور ---
+            thanks_text = (
+                f"✨ **Mission Completed | تمت المهمة** ✨\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"🤖 **Bot:** {BOT_NAME}\n"
+                f"👨‍💻 **Dev:** {DEV_USER}\n\n"
+                f"🌟 **شكراً لاستخدامك خدمتنا!**\n"
+                f"📢 **Channel:** @{CHANNEL_USER}\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"🚀 *Fast • Simple • High Quality*"
+            )
             await client.send_message(user_id, thanks_text)
             await status_msg.delete()
-    except Exception as e: await status_msg.edit(f"❌ **فشل:** {e}")
+    except Exception as e: 
+        await status_msg.edit(f"❌ **Failed:** {e}")
     finally: 
         if os.path.exists(file_path): os.remove(file_path)
 
 if __name__ == "__main__":
-    # تشغيل السيرفر الوهمي في خلفية الكود لكي لا يتوقف ريندر
+    # تشغيل السيرفر الوهمي في الخلفية لإرضاء ريندر
     threading.Thread(target=run_health_check_server, daemon=True).start()
     app.run()
