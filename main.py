@@ -58,7 +58,7 @@ def run_download(url, format_id, file_path):
 # سيقوم Koyeb بقراءة هذه القيم من Environment Variables التي ستضيفها أنت
 API_ID = int(os.environ.get("API_ID", 33536164))
 API_HASH = os.environ.get("API_HASH", "c4f81cfa1dc011bcf66c6a4a58560fd2")
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8320774023:AAG2YCeBsEew587TQoXBTnBQgBQgvLbI7p8")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8320774023:AAG1GnYaaZsPfItMUGgzQvAmVPpk-GDHT0w")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", 7349033289))
 DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
