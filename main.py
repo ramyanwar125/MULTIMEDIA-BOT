@@ -16,14 +16,23 @@ def run_web():
 # --- Config | الإعدادات ---
 API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
-BOT_TOKEN = "8304738811:8304738811:AAHCUi_i6F9j5WWkkn_muwDn-kAx2nOePl0"
+# ملاحظة: تأكد أن التوكن أدناه هو الأحدث من BotFather
+BOT_TOKEN = "8304738811:AAHCUi_i6F9j5WWkkn_muwDn-kAx2nOePl0"
 ADMIN_ID = 7349033289 
 DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
 CHANNEL_USER = "Fast_Mediia" 
 USERS_FILE = "users_database.txt" 
 
-app = Client("fast_media_v19", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+# --- إضافة اسم الجلسة هنا (Session Name) ---
+# تم تغيير الاسم لضمان عدم حدوث تضارب مع أي جلسات قديمة في Render
+app = Client(
+    "fast_media_v_final_render", 
+    api_id=API_ID, 
+    api_hash=API_HASH, 
+    bot_token=BOT_TOKEN
+)
+
 user_cache = {}
 
 def add_user(user_id):
@@ -151,6 +160,6 @@ async def download_cb(client, callback_query):
         if os.path.exists(file_path): os.remove(file_path)
 
 if __name__ == "__main__":
-    # تشغيل السيرفر في خلفية منفصلة
+    # تشغيل السيرفر في خلفية منفصلة لضمان عمل Render
     threading.Thread(target=run_web, daemon=True).start()
     app.run()
