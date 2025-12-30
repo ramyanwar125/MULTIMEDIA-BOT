@@ -74,8 +74,14 @@ async def progress_bar(current, total, status_msg, start_time):
 async def start(client, message):
     if not await check_subscription(client, message): return
     add_user(message.from_user.id)
-    kb = '🔄 Restart Service | بدء الخدمة'], ['👨‍💻 Developer | المطور'
-    if message.from_user.id == ADMIN_ID: kb[1].append('📣 Broadcast | إذاعة')
+    
+    # --- تصحيح السطر 77 هنا ---
+    kb = [
+        ['🔄 Restart Service | بدء الخدمة'], 
+        ['👨‍💻 Developer | المطور']
+    ]
+    if message.from_user.id == ADMIN_ID: 
+        kb.append(['📣 Broadcast | إذاعة'])
     
     welcome_text = (
         f"✨━━━━━━━━━━━━━✨\n"
@@ -122,10 +128,14 @@ async def handle_text(client, message):
         status = await message.reply("🔍 **Analyzing.. جاري المعالجة** ⏳")
         try:
             formats = await asyncio.to_thread(get_all_formats, text)
+            if not formats:
+                await status.edit("❌ **No formats found or link not supported.**")
+                return
             user_cache[user_id] = text
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
             await status.edit("✅ **Formats Found | تم الاستخراج**\nChoose your option: 👇", reply_markup=InlineKeyboardMarkup(btns))
-        except: await status.edit("❌ **Error | فشل المعالجة**")
+        except Exception as e: 
+            await status.edit(f"❌ **Error | فشل المعالجة**\n`{str(e)}` ")
 
 @app.on_callback_query()
 async def download_cb(client, callback_query):
@@ -135,22 +145,31 @@ async def download_cb(client, callback_query):
         await callback_query.answer("⚠️ Session Expired", show_alert=True); return
     
     await callback_query.message.edit("⚙️ **Processing.. جاري التنفيذ**\n━━━━━━━━━━━━━━━━━━\n📡 **Status:** `Direct Connection` ⚡️\n⏳ **Please wait.. يرجى الانتظار**")
-    is_audio = "audio" in f_id
+    
+    # تحديد الصيغة بناءً على الاختيار
+    is_audio = "audio" in f_id or "bestaudio" in f_id
     file_path = f"media_{user_id}.{'m4a' if is_audio else 'mp4'}"
     
     try:
+        # استدعاء دالة التحميل من engine.py
         await asyncio.to_thread(run_download, url, f_id, file_path)
+        
         if os.path.exists(file_path):
             st = time.time()
-            if is_audio: await client.send_audio(user_id, file_path, caption=f"🎵 **Audio by {BOT_NAME}**", progress=progress_bar, progress_args=(callback_query.message, st))
-            else: await client.send_video(user_id, file_path, caption=f"🎬 **Video by {BOT_NAME}**", progress=progress_bar, progress_args=(callback_query.message, st))
+            if is_audio: 
+                await client.send_audio(user_id, file_path, caption=f"🎵 **Audio by {BOT_NAME}**", progress=progress_bar, progress_args=(callback_query.message, st))
+            else: 
+                await client.send_video(user_id, file_path, caption=f"🎬 **Video by {BOT_NAME}**", progress=progress_bar, progress_args=(callback_query.message, st))
+            
             await client.send_message(user_id, f"✨━━━━━━━━━━━━━✨\n✅ **Mission Completed | تمت المهمة**\n✨━━━━━━━━━━━━━✨\n\n📂 **Status:** `Ready` 🎬\n🚀 **By:** **{BOT_NAME}**")
             await callback_query.message.delete()
-    except Exception as e: await callback_query.message.edit(f"❌ **Failed:** {e}")
+        else:
+            await callback_query.message.edit("❌ **File not found after download!**")
+    except Exception as e: 
+        await callback_query.message.edit(f"❌ **Failed:** `{str(e)}` ")
     finally: 
         if os.path.exists(file_path): os.remove(file_path)
 
 if __name__ == "__main__":
-    # تشغيل السيرفر في خلفية منفصلة
     threading.Thread(target=run_web, daemon=True).start()
     app.run()
