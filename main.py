@@ -16,7 +16,7 @@ def run_web():
 # --- Config | الإعدادات ---
 API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
-BOT_TOKEN = "8304738811:AAEDErhCXPyorkVbqjm9DDTELC0EvVTkpGg"
+BOT_TOKEN = "8304738811:AAHRKdJv8pHMfksteOCl5CcHV57BoK5IMr0"
 ADMIN_ID = 7349033289 
 DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
@@ -34,7 +34,9 @@ def add_user(user_id):
 
 def get_users_count():
     if not os.path.exists(USERS_FILE): return 0
-    return len(open(USERS_FILE, "r").read().splitlines())
+    try:
+        return len(open(USERS_FILE, "r").read().splitlines())
+    except: return 0
 
 async def check_subscription(client, message):
     try:
@@ -75,13 +77,11 @@ async def start(client, message):
     if not await check_subscription(client, message): return
     add_user(message.from_user.id)
     
-    # --- تصحيح السطر 77 هنا ---
-    kb = [
-        ['🔄 Restart Service | بدء الخدمة'], 
-        ['👨‍💻 Developer | المطور']
-    ]
+    # تم إصلاح القوس هنا
+    kb = [['🔄 Restart Service | بدء الخدمة'], ['👨‍💻 Developer | المطور']]
+    
     if message.from_user.id == ADMIN_ID: 
-        kb.append(['📣 Broadcast | إذاعة'])
+        kb[1].append('📣 Broadcast | إذاعة')
     
     welcome_text = (
         f"✨━━━━━━━━━━━━━✨\n"
@@ -116,11 +116,13 @@ async def handle_text(client, message):
         return
 
     if user_cache.get(f"bc_{user_id}"):
-        users = open(USERS_FILE).read().splitlines()
-        for u in users:
-            try: await message.copy(int(u))
-            except: pass
-        await message.reply("✅ **Broadcast Sent | تمت الإذاعة**")
+        # تأكد من عدم وجود مسافات بيضاء
+        if os.path.exists(USERS_FILE):
+            users = open(USERS_FILE).read().splitlines()
+            for u in users:
+                try: await message.copy(int(u))
+                except: pass
+            await message.reply("✅ **Broadcast Sent | تمت الإذاعة**")
         user_cache[f"bc_{user_id}"] = False
         return
 
@@ -129,13 +131,13 @@ async def handle_text(client, message):
         try:
             formats = await asyncio.to_thread(get_all_formats, text)
             if not formats:
-                await status.edit("❌ **No formats found or link not supported.**")
+                await status.edit("❌ **No formats found or private video.**")
                 return
             user_cache[user_id] = text
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
             await status.edit("✅ **Formats Found | تم الاستخراج**\nChoose your option: 👇", reply_markup=InlineKeyboardMarkup(btns))
         except Exception as e: 
-            await status.edit(f"❌ **Error | فشل المعالجة**\n`{str(e)}` ")
+            await status.edit(f"❌ **Error:** {str(e)}")
 
 @app.on_callback_query()
 async def download_cb(client, callback_query):
@@ -145,15 +147,11 @@ async def download_cb(client, callback_query):
         await callback_query.answer("⚠️ Session Expired", show_alert=True); return
     
     await callback_query.message.edit("⚙️ **Processing.. جاري التنفيذ**\n━━━━━━━━━━━━━━━━━━\n📡 **Status:** `Direct Connection` ⚡️\n⏳ **Please wait.. يرجى الانتظار**")
-    
-    # تحديد الصيغة بناءً على الاختيار
-    is_audio = "audio" in f_id or "bestaudio" in f_id
+    is_audio = "audio" in f_id
     file_path = f"media_{user_id}.{'m4a' if is_audio else 'mp4'}"
     
     try:
-        # استدعاء دالة التحميل من engine.py
         await asyncio.to_thread(run_download, url, f_id, file_path)
-        
         if os.path.exists(file_path):
             st = time.time()
             if is_audio: 
@@ -163,10 +161,8 @@ async def download_cb(client, callback_query):
             
             await client.send_message(user_id, f"✨━━━━━━━━━━━━━✨\n✅ **Mission Completed | تمت المهمة**\n✨━━━━━━━━━━━━━✨\n\n📂 **Status:** `Ready` 🎬\n🚀 **By:** **{BOT_NAME}**")
             await callback_query.message.delete()
-        else:
-            await callback_query.message.edit("❌ **File not found after download!**")
     except Exception as e: 
-        await callback_query.message.edit(f"❌ **Failed:** `{str(e)}` ")
+        await callback_query.message.edit(f"❌ **Failed:** {str(e)}")
     finally: 
         if os.path.exists(file_path): os.remove(file_path)
 
