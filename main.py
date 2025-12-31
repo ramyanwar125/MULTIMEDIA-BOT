@@ -21,7 +21,7 @@ def run_health_check_server():
 # --- Config | الإعدادات ---
 API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
-BOT_TOKEN = "8254937829:AAEHxP7H_DzB4fdU7lpPnl8mW1ZSM4OfmfU"
+BOT_TOKEN = "8254937829:AAGy1xOchh8SKPfLg4VR4L8SoyJ34scxnU4"
 ADMIN_ID = 7349033289 
 DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
@@ -51,8 +51,7 @@ def get_all_formats(url):
         filesize = info.get('filesize', 0) or info.get('filesize_approx', 0)
         if filesize > (450 * 1024 * 1024):
             return "SIZE_ERROR"
-        # ----------------------------------------
-
+            
         formats_btns = {}
         all_formats = info.get('formats', [])
         for f in all_formats:
@@ -63,11 +62,9 @@ def get_all_formats(url):
                     formats_btns[label] = f.get('format_id')
         if not formats_btns:
             formats_btns["🎬 Best Quality | أفضل جودة"] = "best"
-        
         def extract_res(label):
             nums = re.findall(r'\d+', label)
             return int(nums[0]) if nums else 0
-            
         sorted_labels = sorted(formats_btns.keys(), key=extract_res, reverse=True)
         final_formats = {label: formats_btns[label] for label in sorted_labels}
         final_formats["🎶 Audio | تحميل صوت"] = "bestaudio[ext=m4a]/bestaudio"
@@ -86,8 +83,7 @@ def run_download(url, format_id, file_path):
         ydl.download([url])
 
 # --- Bot Section | قسم البوت ---
-# تم تعديل اسم الجلسة هنا لضمان عدم تكرار الرسائل
-app = Client("fast_media_vFinal_Stable", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("fast_media_v19", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
 def add_user(user_id):
@@ -170,7 +166,7 @@ async def handle_text(client, message):
         try:
             formats = await asyncio.to_thread(get_all_formats, text)
             
-            # --- فحص حالة الخطأ (الحجم) ---
+            # التحقق من شرط حجم الملف
             if formats == "SIZE_ERROR":
                 await status.edit("⚠️ **عذراً! لا يمكن معالجة هذا الرابط.**\n\n❌ **السبب:** حجم الملف كبير جداً ويتجاوز الحد المسموح به (450 ميجابايت).")
                 return
