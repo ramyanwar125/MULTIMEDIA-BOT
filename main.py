@@ -1,4 +1,4 @@
-import os, asyncio, time, re
+ifasts, asyncio, time, re
 from pyrogram import Client, filters
 from pyrogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import UserNotParticipant
@@ -77,7 +77,7 @@ def run_download(url, format_id, file_path):
         ydl.download([url])
 
 # --- Bot Section | قسم البوت ---
-app = Client("fast_media_v00", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("fast_media_v88", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
 def add_user(user_id):
@@ -111,7 +111,7 @@ async def progress_bar(current, total, status_msg, start_time):
 async def start(client, message):
     add_user(message.from_user.id)
     # الأزرار الأساسية
-    kb = [['🔄 Restart Service | بدء الخدمة'], ['👨‍💻 Developer | المطور']]
+    kb = '🔄 Restart Service | بدء الخدمة'], ['👨‍💻 Developer | المطور'
     # إضافة زر الإذاعة للمطور فقط
     if message.from_user.id == ADMIN_ID:
         kb.append(['📣 Broadcast | إذاعة'])
@@ -147,3 +147,64 @@ async def handle_text(client, message):
         await message.reply("📥 **Send your message | أرسل رسالة الإذاعة:**")
         user_cache[f"bc_{user_id}"] = True
         return
+
+    if user_cache.get(f"bc_{user_id}"):
+        users = open(USERS_FILE).read().splitlines()
+        for u in users:
+            try: await message.copy(int(u))
+            except: pass
+        await message.reply("✅ **Broadcast Sent | تمت الإذاعة**")
+        user_cache[f"bc_{user_id}"] = False
+        return
+
+    if "http" in text:
+        status = await message.reply("🔍 **Analyzing.. جاري المعالجة** ⏳")
+        try:
+            formats = await asyncio.to_thread(get_all_formats, text)
+            user_cache[user_id] = text
+            btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
+            await status.edit("✅ **Formats Found | تم الاستخراج**\nChoose your option: 👇", reply_markup=InlineKeyboardMarkup(btns))
+        except: await status.edit("❌ **Error | فشل المعالجة**")
+
+@app.on_callback_query()
+async def download_cb(client, callback_query):
+    f_id, user_id = callback_query.data, callback_query.from_user.id
+    url = user_cache.get(user_id)
+    if not url:
+        await callback_query.answer("⚠️ Session Expired", show_alert=True); return
+    
+    status_msg = await callback_query.message.edit("⚙️ **Processing.. جاري التنفيذ**")
+    is_audio = "audio" in f_id
+    file_path = f"media_{user_id}.{'m4a' if is_audio else 'mp4'}"
+    
+    try:
+        await asyncio.to_thread(run_download, url, f_id, file_path)
+        if os.path.exists(file_path):
+            st = time.time()
+            if is_audio: 
+                await client.send_audio(user_id, file_path, caption=f"🎵 **Audio by {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st))
+            else: 
+                await client.send_video(user_id, file_path, caption=f"🎬 **Video by {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st))
+            
+            # --- رسالة الشكر الاحترافية مع معرف المطور ---
+            thanks_text = (
+                f"✨ **Mission Completed | تمت المهمة** ✨\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"🤖 **Bot:** {BOT_NAME}\n"
+                f"👨‍💻 **Dev:** {DEV_USER}\n\n"
+                f"🌟 **شكراً لاستخدامك خدمتنا!**\n"
+                f"📢 **Channel:** @{CHANNEL_USER}\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"🚀 *Fast • Simple • High Quality*"
+            )
+            await client.send_message(user_id, thanks_text)
+            await status_msg.delete()
+    except Exception as e: 
+        await status_msg.edit(f"❌ **Failed:** {e}")
+    finally: 
+        if os.path.exists(file_path): os.remove(file_path)
+
+if __name__ == "__main__":
+    # تشغيل السيرفر الوهمي في الخلفية لإرضاء ريندر
+    threading.Thread(target=run_health_check_server, daemon=True).start()
+    app.run()
