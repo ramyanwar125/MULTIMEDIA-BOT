@@ -21,7 +21,7 @@ def run_health_check_server():
 # --- Config | الإعدادات ---
 API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
-BOT_TOKEN = "8254937829:AAE60OrFMdRCP2cuuFjWuKn4x0UzO8ZtS6o"
+BOT_TOKEN = "8254937829:AAEHxP7H_DzB4fdU7lpPnl8mW1ZSM4OfmfU"
 ADMIN_ID = 7349033289 
 DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
@@ -86,7 +86,8 @@ def run_download(url, format_id, file_path):
         ydl.download([url])
 
 # --- Bot Section | قسم البوت ---
-app = Client("fast_media_v19", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+# تم تعديل اسم الجلسة هنا لضمان عدم تكرار الرسائل
+app = Client("fast_media_vFinal_Stable", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
 def add_user(user_id):
@@ -169,11 +170,10 @@ async def handle_text(client, message):
         try:
             formats = await asyncio.to_thread(get_all_formats, text)
             
-            # --- دمج شرط فحص الحجم هنا ---
+            # --- فحص حالة الخطأ (الحجم) ---
             if formats == "SIZE_ERROR":
                 await status.edit("⚠️ **عذراً! لا يمكن معالجة هذا الرابط.**\n\n❌ **السبب:** حجم الملف كبير جداً ويتجاوز الحد المسموح به (450 ميجابايت).")
                 return
-            # --------------------------
 
             user_cache[user_id] = text
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
