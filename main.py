@@ -21,7 +21,7 @@ def run_health_check_server():
 # --- Config | الإعدادات ---
 API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
-BOT_TOKEN = "8254937829:AAH1MvppZabP7RCHrrzPSIy5-taWUYWmz8Y"
+BOT_TOKEN = "8254937829:AAEi8GJjhL-8qi-JPvZMVBdrP9lxNZazZ5o"
 ADMIN_ID = 7349033289 
 DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
@@ -77,7 +77,7 @@ def run_download(url, format_id, file_path):
         ydl.download([url])
 
 # --- Bot Section | قسم البوت ---
-app = Client("fast_media_v19", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("fast_media_v129", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
 def add_user(user_id):
