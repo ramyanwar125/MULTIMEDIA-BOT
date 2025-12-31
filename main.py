@@ -1,4 +1,7 @@
-ifasts, asyncio, time, re
+import os  # أضفنا هذا الاستيراد المفقود
+import asyncio
+import time
+import re
 from pyrogram import Client, filters
 from pyrogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import UserNotParticipant
@@ -110,8 +113,12 @@ async def progress_bar(current, total, status_msg, start_time):
 @app.on_message(filters.command("start") & filters.private)
 async def start(client, message):
     add_user(message.from_user.id)
-    # الأزرار الأساسية
-    kb = '🔄 Restart Service | بدء الخدمة'], ['👨‍💻 Developer | المطور'
+    # --- تصحيح الأقواس هنا ---
+    kb = [
+        ['🔄 Restart Service | بدء الخدمة'],
+        ['👨‍💻 Developer | المطور']
+    ]
+    
     # إضافة زر الإذاعة للمطور فقط
     if message.from_user.id == ADMIN_ID:
         kb.append(['📣 Broadcast | إذاعة'])
@@ -149,11 +156,14 @@ async def handle_text(client, message):
         return
 
     if user_cache.get(f"bc_{user_id}"):
-        users = open(USERS_FILE).read().splitlines()
-        for u in users:
-            try: await message.copy(int(u))
-            except: pass
-        await message.reply("✅ **Broadcast Sent | تمت الإذاعة**")
+        if not os.path.exists(USERS_FILE):
+             await message.reply("❌ **No users found | لا يوجد مستخدمين**")
+        else:
+            users = open(USERS_FILE).read().splitlines()
+            for u in users:
+                try: await message.copy(int(u))
+                except: pass
+            await message.reply("✅ **Broadcast Sent | تمت الإذاعة**")
         user_cache[f"bc_{user_id}"] = False
         return
 
@@ -186,7 +196,6 @@ async def download_cb(client, callback_query):
             else: 
                 await client.send_video(user_id, file_path, caption=f"🎬 **Video by {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st))
             
-            # --- رسالة الشكر الاحترافية مع معرف المطور ---
             thanks_text = (
                 f"✨ **Mission Completed | تمت المهمة** ✨\n"
                 f"━━━━━━━━━━━━━━━━━━\n"
@@ -205,6 +214,5 @@ async def download_cb(client, callback_query):
         if os.path.exists(file_path): os.remove(file_path)
 
 if __name__ == "__main__":
-    # تشغيل السيرفر الوهمي في الخلفية لإرضاء ريندر
     threading.Thread(target=run_health_check_server, daemon=True).start()
     app.run()
