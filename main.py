@@ -1,9 +1,22 @@
 import os, asyncio, time, re
 from pyrogram import Client, filters
 from pyrogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.errors import UserNotParticipant
 import yt_dlp
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
+
+# --- سيرفر وهمي لإرضاء ريندر (Port Binding) ---
+def run_health_check_server():
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"Bot is Running")
+    
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(('0.0.0.0', port), Handler)
+    server.serve_forever()
 
 # --- Config | الإعدادات ---
 API_ID = 33536164
@@ -14,20 +27,8 @@ DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
 CHANNEL_USER = "Fast_Mediia" 
 USERS_FILE = "users_database.txt" 
-MAX_SIZE_MB = 450  # حد التحميل
 
-# --- سيرفر وهمي لريندر ---
-def run_health_check_server():
-    class Handler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"Bot is Running")
-    port = int(os.environ.get("PORT", 8080))
-    server = HTTPServer(('0.0.0.0', port), Handler)
-    server.serve_forever()
-
-# --- قسم المحرك (بدون تكرار) ---
+# --- Engine Section | قسم المحرك ---
 def prepare_engine():
     cookie_file = "cookies_stable.txt"
     if not os.path.exists(cookie_file):
@@ -36,24 +37,70 @@ def prepare_engine():
             f.write(".youtube.com\tTRUE\t/\tTRUE\t1766757959\tGPS\t1\n")
     return cookie_file
 
-def get_video_data(url):
+def get_all_formats(url):
     ydl_opts = {
         'quiet': True, 
         'cookiefile': prepare_engine(), 
-        'nocheckcertificate': True,
+        'nocheckcertificate': True, 
+        'no_warnings': True,
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        return ydl.extract_info(url, download=False)
+        info = ydl.extract_info(url, download=False)
+        
+        # --- فحص حجم الفيديو (الليمت 450 ميجا) ---
+        filesize = info.get('filesize', 0) or info.get('filesize_approx', 0)
+        if filesize > (450 * 1024 * 1024):
+            return "SIZE_ERROR"
+        
+        formats_btns = {}
+        all_formats = info.get('formats', [])
+        for f in all_formats:
+            if f.get('vcodec') != 'none' and f.get('acodec') != 'none':
+                res = f.get('height')
+                if res:
+                    label = f"🎬 {res}p"
+                    formats_btns[label] = f.get('format_id')
+        if not formats_btns:
+            formats_btns["🎬 Best Quality | أفضل جودة"] = "best"
+        def extract_res(label):
+            nums = re.findall(r'\d+', label)
+            return int(nums[0]) if nums else 0
+        sorted_labels = sorted(formats_btns.keys(), key=extract_res, reverse=True)
+        final_formats = {label: formats_btns[label] for label in sorted_labels}
+        final_formats["🎶 Audio | تحميل صوت"] = "bestaudio[ext=m4a]/bestaudio"
+        return final_formats
 
-# --- قسم البوت ---
-app = Client("SkyNet_Media_v25", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+def run_download(url, format_id, file_path):
+    ydl_opts = {
+        'outtmpl': file_path,
+        'format': format_id,
+        'cookiefile': 'cookies_stable.txt',
+        'nocheckcertificate': True,
+        'quiet': True,
+        'continuedl': True,
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])
+
+# --- Bot Section | قسم البوت ---
+app = Client("fast_media_v19", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
+
+def add_user(user_id):
+    if not os.path.exists(USERS_FILE): open(USERS_FILE, "w").close()
+    users = open(USERS_FILE, "r").read().splitlines()
+    if str(user_id) not in users:
+        with open(USERS_FILE, "a") as f: f.write(f"{user_id}\n")
+
+def get_users_count():
+    if not os.path.exists(USERS_FILE): return 0
+    return len(open(USERS_FILE, "r").read().splitlines())
 
 async def progress_bar(current, total, status_msg, start_time):
     now = time.time()
     diff = now - start_time
     if diff < 3.0: return
-    percentage = (current * 100) / total
+    percentage = current * 100 / total
     speed = current / diff
     bar = "▬" * int(percentage // 10) + "▭" * (10 - int(percentage // 10))
     tmp = (
@@ -68,13 +115,10 @@ async def progress_bar(current, total, status_msg, start_time):
 
 @app.on_message(filters.command("start") & filters.private)
 async def start(client, message):
-    if not os.path.exists(USERS_FILE): open(USERS_FILE, "w").close()
-    users = open(USERS_FILE).read().splitlines()
-    if str(message.from_user.id) not in users:
-        with open(USERS_FILE, "a") as f: f.write(f"{message.from_user.id}\n")
-    
+    add_user(message.from_user.id)
     kb = [['🔄 Restart Service | بدء الخدمة'], ['👨‍💻 Developer | المطور']]
-    if message.from_user.id == ADMIN_ID: kb.append(['📣 Broadcast | إذاعة'])
+    if message.from_user.id == ADMIN_ID:
+        kb.append(['📣 Broadcast | إذاعة'])
     
     welcome_text = (
         f"✨━━━━━━━━━━━━━✨\n"
@@ -83,6 +127,7 @@ async def start(client, message):
         f"✨━━━━━━━━━━━━━✨\n\n"
         f"🚀 **Fast Downloader for | بوت تحميل سريع:**\n"
         f"📹 YouTube | 📸 Instagram | 🎵 TikTok\n"
+        f"👻 Snapchat | 🔵 Facebook\n\n"
         f"👇 **Send link now! | أرسل الرابط الآن!**"
     )
     await message.reply(welcome_text, reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True))
@@ -91,62 +136,81 @@ async def start(client, message):
 async def handle_text(client, message):
     text, user_id = message.text, message.from_user.id
     
+    if text == '🔄 Restart Service | بدء الخدمة':
+        await message.reply("📡 **System Ready.. النظام جاهز!** ⚡️")
+        return
+    
     if text == '👨‍💻 Developer | المطور':
-        msg = f"👑 **Main Developer:** {DEV_USER}\n📢 **Our Channel:** @{CHANNEL_USER}"
+        msg = f"👑 **Main Developer:** {DEV_USER}\n📢 **Our Channel:** @{CHANNEL_USER}\n"
+        if user_id == ADMIN_ID:
+            msg += f"📊 **Total Users:** `{get_users_count()}`"
         await message.reply(msg)
+        return
+
+    if text == '📣 Broadcast | إذاعة' and user_id == ADMIN_ID:
+        await message.reply("📥 **Send your message | أرسل رسالة الإذاعة:**")
+        user_cache[f"bc_{user_id}"] = True
+        return
+
+    if user_cache.get(f"bc_{user_id}"):
+        users = open(USERS_FILE).read().splitlines()
+        for u in users:
+            try: await message.copy(int(u))
+            except: pass
+        await message.reply("✅ **Broadcast Sent | تمت الإذاعة**")
+        user_cache[f"bc_{user_id}"] = False
         return
 
     if "http" in text:
         status = await message.reply("🔍 **Analyzing.. جاري المعالجة** ⏳")
         try:
-            info = await asyncio.to_thread(get_video_data, text)
-            user_cache[user_id] = {"url": text, "info": info}
-            btns = []
-            for f in info.get('formats', []):
-                if f.get('vcodec') != 'none' and f.get('acodec') != 'none' and f.get('height'):
-                    btns.append([InlineKeyboardButton(f"🎬 {f['height']}p", callback_data=f['format_id'])])
-            btns.append([InlineKeyboardButton("🎶 Audio | تحميل صوت", callback_data="bestaudio")])
+            formats = await asyncio.to_thread(get_all_formats, text)
+            
+            # --- فحص حالة الخطأ الخاصة بالحجم ---
+            if formats == "SIZE_ERROR":
+                await status.edit("⚠️ **عذراً! لا يمكن معالجة هذا الرابط.**\n\n❌ **السبب:** حجم الملف كبير جداً ويتجاوز الحد المسموح به (450 ميجابايت).")
+                return
+
+            user_cache[user_id] = text
+            btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
             await status.edit("✅ **Formats Found | تم الاستخراج**\nChoose your option: 👇", reply_markup=InlineKeyboardMarkup(btns))
         except: await status.edit("❌ **Error | فشل المعالجة**")
 
 @app.on_callback_query()
 async def download_cb(client, callback_query):
     f_id, user_id = callback_query.data, callback_query.from_user.id
-    data = user_cache.get(user_id)
-    if not data: return
-
-    # فحص الحجم
-    size_bytes = 0
-    for f in data["info"].get('formats', []):
-        if f.get('format_id') == f_id:
-            size_bytes = f.get('filesize') or f.get('filesize_approx') or 0
+    url = user_cache.get(user_id)
+    if not url:
+        await callback_query.answer("⚠️ Session Expired", show_alert=True); return
     
-    if (size_bytes / (1024*1024)) > MAX_SIZE_MB:
-        await callback_query.message.edit(f"❌ **File too large | الحجم كبير**\nMax: {MAX_SIZE_MB}MB")
-        return
-
     status_msg = await callback_query.message.edit("⚙️ **Processing.. جاري التنفيذ**")
-    file_path = f"media_{user_id}.mp4"
+    is_audio = "audio" in f_id
+    file_path = f"media_{user_id}.{'m4a' if is_audio else 'mp4'}"
     
     try:
-        ydl_opts = {'outtmpl': file_path, 'format': f_id, 'cookiefile': 'cookies_stable.txt', 'quiet': True}
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            await asyncio.to_thread(ydl.download, [data["url"]])
-        
-        st = time.time()
-        await client.send_video(user_id, file_path, caption=f"🎬 **By {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st))
-        
-        thanks_text = (
-            f"✨ **Mission Completed | تمت المهمة** ✨\n"
-            f"━━━━━━━━━━━━━━━━━━\n"
-            f"🤖 **Bot:** {BOT_NAME}\n"
-            f"👨‍💻 **Dev:** {DEV_USER}\n"
-            f"━━━━━━━━━━━━━━━━━━"
-        )
-        await client.send_message(user_id, thanks_text)
-        await status_msg.delete()
-    except Exception as e: await status_msg.edit(f"❌ **Failed:** {e}")
-    finally:
+        await asyncio.to_thread(run_download, url, f_id, file_path)
+        if os.path.exists(file_path):
+            st = time.time()
+            if is_audio: 
+                await client.send_audio(user_id, file_path, caption=f"🎵 **Audio by {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st))
+            else: 
+                await client.send_video(user_id, file_path, caption=f"🎬 **Video by {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st))
+            
+            thanks_text = (
+                f"✨ **Mission Completed | تمت المهمة** ✨\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"🤖 **Bot:** {BOT_NAME}\n"
+                f"👨‍💻 **Dev:** {DEV_USER}\n\n"
+                f"🌟 **شكراً لاستخدامك خدمتنا!**\n"
+                f"📢 **Channel:** @{CHANNEL_USER}\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"🚀 *Fast • Simple • High Quality*"
+            )
+            await client.send_message(user_id, thanks_text)
+            await status_msg.delete()
+    except Exception as e: 
+        await status_msg.edit(f"❌ **Failed:** {e}")
+    finally: 
         if os.path.exists(file_path): os.remove(file_path)
 
 if __name__ == "__main__":
