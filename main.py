@@ -19,9 +19,9 @@ def run_health_check_server():
     server.serve_forever()
 
 # --- Config | الإعدادات ---
-API_ID = 35909466
-API_HASH = "d5fbb863164b16d1e1675106509fae4d"
-BOT_TOKEN = "8254937829:AAFnmSjdL7hUt0Cw2kVFH6NHtTNhZHz8ZvQ"
+API_ID = 33536164
+API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
+BOT_TOKEN = "8254937829:AAE2ayqwQJlxix9VC70sWvj2Ss5nSOxgId0"
 ADMIN_ID = 7349033289 
 DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
@@ -46,12 +46,6 @@ def get_all_formats(url):
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
-        
-        # --- فحص حجم الفيديو (الليمت 450 ميجا) ---
-        filesize = info.get('filesize', 0) or info.get('filesize_approx', 0)
-        if filesize > (450 * 1024 * 1024):
-            return "SIZE_ERROR"
-
         formats_btns = {}
         all_formats = info.get('formats', [])
         for f in all_formats:
@@ -60,14 +54,11 @@ def get_all_formats(url):
                 if res:
                     label = f"🎬 {res}p"
                     formats_btns[label] = f.get('format_id')
-        
         if not formats_btns:
             formats_btns["🎬 Best Quality | أفضل جودة"] = "best"
-            
         def extract_res(label):
             nums = re.findall(r'\d+', label)
             return int(nums[0]) if nums else 0
-            
         sorted_labels = sorted(formats_btns.keys(), key=extract_res, reverse=True)
         final_formats = {label: formats_btns[label] for label in sorted_labels}
         final_formats["🎶 Audio | تحميل صوت"] = "bestaudio[ext=m4a]/bestaudio"
@@ -86,7 +77,7 @@ def run_download(url, format_id, file_path):
         ydl.download([url])
 
 # --- Bot Section | قسم البوت ---
-app = Client("fast_media_v22", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("fast_media_v00", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
 def add_user(user_id):
@@ -119,7 +110,9 @@ async def progress_bar(current, total, status_msg, start_time):
 @app.on_message(filters.command("start") & filters.private)
 async def start(client, message):
     add_user(message.from_user.id)
+    # الأزرار الأساسية
     kb = [['🔄 Restart Service | بدء الخدمة'], ['👨‍💻 Developer | المطور']]
+    # إضافة زر الإذاعة للمطور فقط
     if message.from_user.id == ADMIN_ID:
         kb.append(['📣 Broadcast | إذاعة'])
     
@@ -154,69 +147,3 @@ async def handle_text(client, message):
         await message.reply("📥 **Send your message | أرسل رسالة الإذاعة:**")
         user_cache[f"bc_{user_id}"] = True
         return
-
-    if user_cache.get(f"bc_{user_id}"):
-        users = open(USERS_FILE).read().splitlines()
-        for u in users:
-            try: await message.copy(int(u))
-            except: pass
-        await message.reply("✅ **Broadcast Sent | تمت الإذاعة**")
-        user_cache[f"bc_{user_id}"] = False
-        return
-
-    if "http" in text:
-        status = await message.reply("🔍 **Analyzing.. جاري المعالجة** ⏳")
-        try:
-            formats = await asyncio.to_thread(get_all_formats, text)
-            
-            # --- التحقق من خطأ الحجم المدمج ---
-            if formats == "SIZE_ERROR":
-                await status.edit("⚠️ **عذراً! لا يمكن معالجة هذا الرابط.**\n\n❌ **السبب:** حجم الملف كبير جداً ويتجاوز الحد المسموح به (450 ميجابايت).")
-                return
-
-            user_cache[user_id] = text
-            btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
-            await status.edit("✅ **Formats Found | تم الاستخراج**\nChoose your option: 👇", reply_markup=InlineKeyboardMarkup(btns))
-        except Exception as e: 
-            await status.edit("❌ **Error | فشل المعالجة**")
-
-@app.on_callback_query()
-async def download_cb(client, callback_query):
-    f_id, user_id = callback_query.data, callback_query.from_user.id
-    url = user_cache.get(user_id)
-    if not url:
-        await callback_query.answer("⚠️ Session Expired", show_alert=True); return
-    
-    status_msg = await callback_query.message.edit("⚙️ **Processing.. جاري التنفيذ**")
-    is_audio = "audio" in f_id
-    file_path = f"media_{user_id}.{'m4a' if is_audio else 'mp4'}"
-    
-    try:
-        await asyncio.to_thread(run_download, url, f_id, file_path)
-        if os.path.exists(file_path):
-            st = time.time()
-            if is_audio: 
-                await client.send_audio(user_id, file_path, caption=f"🎵 **Audio by {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st))
-            else: 
-                await client.send_video(user_id, file_path, caption=f"🎬 **Video by {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st))
-            
-            thanks_text = (
-                f"✨ **Mission Completed | تمت المهمة** ✨\n"
-                f"━━━━━━━━━━━━━━━━━━\n"
-                f"🤖 **Bot:** {BOT_NAME}\n"
-                f"👨‍💻 **Dev:** {DEV_USER}\n\n"
-                f"🌟 **شكراً لاستخدامك خدمتنا!**\n"
-                f"📢 **Channel:** @{CHANNEL_USER}\n"
-                f"━━━━━━━━━━━━━━━━━━\n"
-                f"🚀 *Fast • Simple • High Quality*"
-            )
-            await client.send_message(user_id, thanks_text)
-            await status_msg.delete()
-    except Exception as e: 
-        await status_msg.edit(f"❌ **Failed:** {e}")
-    finally: 
-        if os.path.exists(file_path): os.remove(file_path)
-
-if __name__ == "__main__":
-    threading.Thread(target=run_health_check_server, daemon=True).start()
-    app.run()
