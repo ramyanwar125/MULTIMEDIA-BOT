@@ -19,7 +19,7 @@ def run_health_check_server():
     server.serve_forever()
 
 # --- Config | الإعدادات ---
-API_ID = 33536164
+API_ID = 35909466
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
 BOT_TOKEN = "8254937829:AAE2ayqwQJlxix9VC70sWvj2Ss5nSOxgId0"
 ADMIN_ID = 7349033289 
