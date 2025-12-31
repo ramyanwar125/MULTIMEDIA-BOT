@@ -21,7 +21,7 @@ def run_health_check_server():
 # --- Config | الإعدادات ---
 API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
-BOT_TOKEN = "8304738811:AAGplcj8YkZcmaY32zNifkraNWSLU5MWrgI"
+BOT_TOKEN = "8151240519:AAGqX7jZpknP7ZTqQc2saY-H7KjuTi2tWWg"
 ADMIN_ID = 7349033289 
 DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
@@ -46,6 +46,13 @@ def get_all_formats(url):
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
+        
+        # --- فحص حجم الفيديو (الليمت 450 ميجا) ---
+        filesize = info.get('filesize', 0) or info.get('filesize_approx', 0)
+        if filesize > (450 * 1024 * 1024):
+            return "SIZE_ERROR"
+        # ----------------------------------------
+
         formats_btns = {}
         all_formats = info.get('formats', [])
         for f in all_formats:
@@ -56,9 +63,11 @@ def get_all_formats(url):
                     formats_btns[label] = f.get('format_id')
         if not formats_btns:
             formats_btns["🎬 Best Quality | أفضل جودة"] = "best"
+        
         def extract_res(label):
             nums = re.findall(r'\d+', label)
             return int(nums[0]) if nums else 0
+            
         sorted_labels = sorted(formats_btns.keys(), key=extract_res, reverse=True)
         final_formats = {label: formats_btns[label] for label in sorted_labels}
         final_formats["🎶 Audio | تحميل صوت"] = "bestaudio[ext=m4a]/bestaudio"
@@ -110,9 +119,7 @@ async def progress_bar(current, total, status_msg, start_time):
 @app.on_message(filters.command("start") & filters.private)
 async def start(client, message):
     add_user(message.from_user.id)
-    # الأزرار الأساسية
     kb = [['🔄 Restart Service | بدء الخدمة'], ['👨‍💻 Developer | المطور']]
-    # إضافة زر الإذاعة للمطور فقط
     if message.from_user.id == ADMIN_ID:
         kb.append(['📣 Broadcast | إذاعة'])
     
@@ -161,10 +168,18 @@ async def handle_text(client, message):
         status = await message.reply("🔍 **Analyzing.. جاري المعالجة** ⏳")
         try:
             formats = await asyncio.to_thread(get_all_formats, text)
+            
+            # --- دمج شرط فحص الحجم هنا ---
+            if formats == "SIZE_ERROR":
+                await status.edit("⚠️ **عذراً! لا يمكن معالجة هذا الرابط.**\n\n❌ **السبب:** حجم الملف كبير جداً ويتجاوز الحد المسموح به (450 ميجابايت).")
+                return
+            # --------------------------
+
             user_cache[user_id] = text
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
             await status.edit("✅ **Formats Found | تم الاستخراج**\nChoose your option: 👇", reply_markup=InlineKeyboardMarkup(btns))
-        except: await status.edit("❌ **Error | فشل المعالجة**")
+        except: 
+            await status.edit("❌ **Error | فشل المعالجة**")
 
 @app.on_callback_query()
 async def download_cb(client, callback_query):
@@ -186,7 +201,6 @@ async def download_cb(client, callback_query):
             else: 
                 await client.send_video(user_id, file_path, caption=f"🎬 **Video by {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st))
             
-            # --- رسالة الشكر الاحترافية مع معرف المطور ---
             thanks_text = (
                 f"✨ **Mission Completed | تمت المهمة** ✨\n"
                 f"━━━━━━━━━━━━━━━━━━\n"
@@ -205,6 +219,5 @@ async def download_cb(client, callback_query):
         if os.path.exists(file_path): os.remove(file_path)
 
 if __name__ == "__main__":
-    # تشغيل السيرفر الوهمي في الخلفية لإرضاء ريندر
     threading.Thread(target=run_health_check_server, daemon=True).start()
     app.run()
