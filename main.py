@@ -21,12 +21,13 @@ def run_health_check_server():
 # --- Config | الإعدادات ---
 API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
-BOT_TOKEN = "8254937829:AAGy1xOchh8SKPfLg4VR4L8SoyJ34scxnU4"
+BOT_TOKEN = "8254937829:AAFAGmNRhrpP6qbc9MXO33_aqYTHqG1qmv8"
 ADMIN_ID = 7349033289 
 DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
 CHANNEL_USER = "Fast_Mediia" 
 USERS_FILE = "users_database.txt" 
+MAX_SIZE_MB = 450  # الحد الأقصى للملف 450 ميجابايت
 
 # --- Engine Section | قسم المحرك ---
 def prepare_engine():
@@ -46,12 +47,6 @@ def get_all_formats(url):
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
-        
-        # --- فحص حجم الفيديو (الليمت 450 ميجا) ---
-        filesize = info.get('filesize', 0) or info.get('filesize_approx', 0)
-        if filesize > (450 * 1024 * 1024):
-            return "SIZE_ERROR"
-            
         formats_btns = {}
         all_formats = info.get('formats', [])
         for f in all_formats:
@@ -68,7 +63,7 @@ def get_all_formats(url):
         sorted_labels = sorted(formats_btns.keys(), key=extract_res, reverse=True)
         final_formats = {label: formats_btns[label] for label in sorted_labels}
         final_formats["🎶 Audio | تحميل صوت"] = "bestaudio[ext=m4a]/bestaudio"
-        return final_formats
+        return final_formats, info # أضفنا الـ info هنا لفحص الحجم لاحقاً
 
 def run_download(url, format_id, file_path):
     ydl_opts = {
@@ -83,7 +78,7 @@ def run_download(url, format_id, file_path):
         ydl.download([url])
 
 # --- Bot Section | قسم البوت ---
-app = Client("fast_media_v19", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("MediaDownloaderSession", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
 def add_user(user_id):
@@ -164,26 +159,40 @@ async def handle_text(client, message):
     if "http" in text:
         status = await message.reply("🔍 **Analyzing.. جاري المعالجة** ⏳")
         try:
-            formats = await asyncio.to_thread(get_all_formats, text)
-            
-            # التحقق من شرط حجم الملف
-            if formats == "SIZE_ERROR":
-                await status.edit("⚠️ **عذراً! لا يمكن معالجة هذا الرابط.**\n\n❌ **السبب:** حجم الملف كبير جداً ويتجاوز الحد المسموح به (450 ميجابايت).")
-                return
-
-            user_cache[user_id] = text
+            formats, info = await asyncio.to_thread(get_all_formats, text)
+            user_cache[user_id] = {"url": text, "info": info} # تخزين الرابط ومعلومات الفيديو
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
             await status.edit("✅ **Formats Found | تم الاستخراج**\nChoose your option: 👇", reply_markup=InlineKeyboardMarkup(btns))
-        except: 
-            await status.edit("❌ **Error | فشل المعالجة**")
+        except: await status.edit("❌ **Error | فشل المعالجة**")
 
 @app.on_callback_query()
 async def download_cb(client, callback_query):
     f_id, user_id = callback_query.data, callback_query.from_user.id
-    url = user_cache.get(user_id)
-    if not url:
+    data = user_cache.get(user_id)
+    if not data:
         await callback_query.answer("⚠️ Session Expired", show_alert=True); return
     
+    url = data["url"]
+    info = data["info"]
+
+    # --- فحص حجم الملف المختار ---
+    size_bytes = 0
+    for f in info.get('formats', []):
+        if f.get('format_id') == f_id:
+            size_bytes = f.get('filesize') or f.get('filesize_approx') or 0
+            break
+    
+    size_mb = size_bytes / (1024 * 1024)
+    if size_mb > MAX_SIZE_MB:
+        await callback_query.message.edit(
+            f"❌ **Sorry! File is too large | الحجم كبير جداً**\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"📦 **Size:** `{size_mb:.1f} MB`\n"
+            f"🚫 **Limit:** `{MAX_SIZE_MB} MB`\n\n"
+            f"⚠️ يرجى اختيار جودة أقل للحفاظ على استقرار السيرفر."
+        )
+        return
+
     status_msg = await callback_query.message.edit("⚙️ **Processing.. جاري التنفيذ**")
     is_audio = "audio" in f_id
     file_path = f"media_{user_id}.{'m4a' if is_audio else 'mp4'}"
