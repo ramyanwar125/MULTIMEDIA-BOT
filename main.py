@@ -46,12 +46,6 @@ def get_all_formats(url):
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
-        
-        # --- فحص حجم الفيديو (الليمت 450 ميجا) ---
-        filesize = info.get('filesize', 0) or info.get('filesize_approx', 0)
-        if filesize > (450 * 1024 * 1024):
-            return "SIZE_ERROR"
-        
         formats_btns = {}
         all_formats = info.get('formats', [])
         for f in all_formats:
@@ -116,7 +110,9 @@ async def progress_bar(current, total, status_msg, start_time):
 @app.on_message(filters.command("start") & filters.private)
 async def start(client, message):
     add_user(message.from_user.id)
+    # الأزرار الأساسية
     kb = [['🔄 Restart Service | بدء الخدمة'], ['👨‍💻 Developer | المطور']]
+    # إضافة زر الإذاعة للمطور فقط
     if message.from_user.id == ADMIN_ID:
         kb.append(['📣 Broadcast | إذاعة'])
     
@@ -165,12 +161,6 @@ async def handle_text(client, message):
         status = await message.reply("🔍 **Analyzing.. جاري المعالجة** ⏳")
         try:
             formats = await asyncio.to_thread(get_all_formats, text)
-            
-            # --- فحص حالة الخطأ الخاصة بالحجم ---
-            if formats == "SIZE_ERROR":
-                await status.edit("⚠️ **عذراً! لا يمكن معالجة هذا الرابط.**\n\n❌ **السبب:** حجم الملف كبير جداً ويتجاوز الحد المسموح به (450 ميجابايت).")
-                return
-
             user_cache[user_id] = text
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
             await status.edit("✅ **Formats Found | تم الاستخراج**\nChoose your option: 👇", reply_markup=InlineKeyboardMarkup(btns))
@@ -196,6 +186,7 @@ async def download_cb(client, callback_query):
             else: 
                 await client.send_video(user_id, file_path, caption=f"🎬 **Video by {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st))
             
+            # --- رسالة الشكر الاحترافية مع معرف المطور ---
             thanks_text = (
                 f"✨ **Mission Completed | تمت المهمة** ✨\n"
                 f"━━━━━━━━━━━━━━━━━━\n"
@@ -214,5 +205,6 @@ async def download_cb(client, callback_query):
         if os.path.exists(file_path): os.remove(file_path)
 
 if __name__ == "__main__":
+    # تشغيل السيرفر الوهمي في الخلفية لإرضاء ريندر
     threading.Thread(target=run_health_check_server, daemon=True).start()
     app.run()
