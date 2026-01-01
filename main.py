@@ -26,7 +26,7 @@ ADMIN_ID = 7349033289
 DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
 CHANNEL_USER = "Fast_Mediia" 
-CHANNEL_ID = -1002235941650  
+CHANNEL_ID = -1003575743630  
 USERS_FILE = "users_database.txt" 
 MAX_SIZE_MB = 450  # الحد الأقصى للتحميل بالميجابايت
 
