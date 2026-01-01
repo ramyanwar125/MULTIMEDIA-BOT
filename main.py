@@ -26,8 +26,9 @@ ADMIN_ID = 7349033289
 DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
 CHANNEL_USER = "Fast_Mediia" 
-CHANNEL_ID = -1002235941650  # آيدي قناتك
+CHANNEL_ID = -1002235941650  
 USERS_FILE = "users_database.txt" 
+MAX_SIZE_MB = 450  # الحد الأقصى للتحميل بالميجابايت
 
 # --- Engine Section | قسم المحرك ---
 def prepare_engine():
@@ -49,6 +50,12 @@ def get_all_formats(url):
         info = ydl.extract_info(url, download=False)
         formats_btns = {}
         all_formats = info.get('formats', [])
+        
+        # فحص الحجم قبل عرض الجودات
+        filesize = info.get('filesize') or info.get('filesize_approx')
+        if filesize and filesize > (MAX_SIZE_MB * 1024 * 1024):
+            return "too_big"
+
         for f in all_formats:
             if f.get('vcodec') != 'none' and f.get('acodec') != 'none':
                 res = f.get('height')
@@ -57,9 +64,11 @@ def get_all_formats(url):
                     formats_btns[label] = f.get('format_id')
         if not formats_btns:
             formats_btns["🎬 Best Quality | أفضل جودة"] = "best"
+        
         def extract_res(label):
             nums = re.findall(r'\d+', label)
             return int(nums[0]) if nums else 0
+        
         sorted_labels = sorted(formats_btns.keys(), key=extract_res, reverse=True)
         final_formats = {label: formats_btns[label] for label in sorted_labels}
         final_formats["🎶 Audio | تحميل صوت"] = "bestaudio[ext=m4a]/bestaudio"
@@ -75,10 +84,15 @@ def run_download(url, format_id, file_path):
         'continuedl': True,
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        # فحص إضافي للحجم قبل البدء بالتحميل الفعلي
+        info = ydl.extract_info(url, download=False)
+        filesize = info.get('filesize') or info.get('filesize_approx')
+        if filesize and filesize > (MAX_SIZE_MB * 1024 * 1024):
+             raise Exception("LIMIT_EXCEEDED")
         ydl.download([url])
 
 # --- Bot Section | قسم البوت ---
-app = Client("fast_media_v169", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("fast_media_v155", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
 def add_user(user_id):
@@ -108,27 +122,34 @@ async def progress_bar(current, total, status_msg, start_time):
     try: await status_msg.edit(tmp)
     except: pass
 
+# --- دالة التحقق من الاشتراك ---
+async def check_subscription(client, user_id):
+    if user_id == ADMIN_ID: return True
+    try:
+        member = await client.get_chat_member(CHANNEL_ID, user_id)
+        if member.status: return True
+    except UserNotParticipant:
+        return False
+    except Exception:
+        return True
+    return False
+
 @app.on_message(filters.private)
 async def sub_and_start_logic(client, message):
     user_id = message.from_user.id
     add_user(user_id)
     
-    # --- نظام الاشتراك الإجباري ---
-    if user_id != ADMIN_ID:
-        try:
-            await client.get_chat_member(CHANNEL_ID, user_id)
-        except UserNotParticipant:
-            join_button = InlineKeyboardMarkup([[InlineKeyboardButton("Join Channel | انضم للقناة 📢", url=f"https://t.me/{CHANNEL_USER}")]])
-            await message.reply(
-                f"⚠️ **عذراً! يجب عليك الاشتراك في قناة البوت أولاً لاستخدام الخدمة.**\n\n"
-                f"📢 القناة: @{CHANNEL_USER}\n\n"
-                f"بعد الاشتراك، أرسل /start",
-                reply_markup=join_button
-            )
-            return
-        except Exception: pass 
+    # التحقق من الاشتراك أولاً
+    if not await check_subscription(client, user_id):
+        join_button = InlineKeyboardMarkup([[InlineKeyboardButton("Join Channel | انضم للقناة 📢", url=f"https://t.me/{CHANNEL_USER}")]])
+        await message.reply(
+            f"⚠️ **عذراً! يجب عليك الاشتراك في قناة البوت أولاً لاستخدام الخدمة.**\n\n"
+            f"📢 القناة: @{CHANNEL_USER}\n\n"
+            f"بعد الاشتراك، أرسل /start",
+            reply_markup=join_button
+        )
+        return
 
-    # --- المنطق الأصلي للأوامر ---
     if message.text == "/start" or message.text == '🔄 Restart Service | بدء الخدمة':
         kb = [['🔄 Restart Service | بدء الخدمة'], ['👨‍💻 Developer | المطور']]
         if user_id == ADMIN_ID:
@@ -147,7 +168,6 @@ async def sub_and_start_logic(client, message):
         await message.reply(welcome_text, reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True))
         return
 
-    # استكمال معالجة النصوص (المطور، الإذاعة، الروابط)
     await handle_text(client, message)
 
 async def handle_text(client, message):
@@ -175,17 +195,34 @@ async def handle_text(client, message):
         return
 
     if text and "http" in text:
+        # التحقق من الاشتراك قبل البدء بالمعالجة
+        if not await check_subscription(client, user_id):
+            await message.reply("⚠️ يرجى الاشتراك في القناة أولاً @"+CHANNEL_USER)
+            return
+
         status = await message.reply("🔍 **Analyzing.. جاري المعالجة** ⏳")
         try:
             formats = await asyncio.to_thread(get_all_formats, text)
+            
+            if formats == "too_big":
+                await status.edit(f"❌ **عذراً! الحجم كبير جداً.**\n\nالحد الأقصى للتحميل هو **{MAX_SIZE_MB} ميجابايت**.")
+                return
+
             user_cache[user_id] = text
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
             await status.edit("✅ **Formats Found | تم الاستخراج**\nChoose your option: 👇", reply_markup=InlineKeyboardMarkup(btns))
-        except: await status.edit("❌ **Error | فشل المعالجة**")
+        except: 
+            await status.edit("❌ **Error | فشل في جلب البيانات**")
 
 @app.on_callback_query()
 async def download_cb(client, callback_query):
     f_id, user_id = callback_query.data, callback_query.from_user.id
+    
+    # تحقق من الاشتراك عند الضغط على أزرار الجودة
+    if not await check_subscription(client, user_id):
+        await callback_query.answer("⚠️ يجب عليك الاشتراك في القناة أولاً!", show_alert=True)
+        return
+
     url = user_cache.get(user_id)
     if not url:
         await callback_query.answer("⚠️ Session Expired", show_alert=True); return
@@ -203,20 +240,13 @@ async def download_cb(client, callback_query):
             else: 
                 await client.send_video(user_id, file_path, caption=f"🎬 **Video by {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st))
             
-            thanks_text = (
-                f"✨ **Mission Completed | تمت المهمة** ✨\n"
-                f"━━━━━━━━━━━━━━━━━━\n"
-                f"🤖 **Bot:** {BOT_NAME}\n"
-                f"👨‍💻 **Dev:** {DEV_USER}\n\n"
-                f"🌟 **شكراً لاستخدامك خدمتنا!**\n"
-                f"📢 **Channel:** @{CHANNEL_USER}\n"
-                f"━━━━━━━━━━━━━━━━━━\n"
-                f"🚀 *Fast • Simple • High Quality*"
-            )
-            await client.send_message(user_id, thanks_text)
+            await client.send_message(user_id, f"✨ **Mission Completed | تمت المهمة**\n📢 **Channel:** @{CHANNEL_USER}")
             await status_msg.delete()
-    except Exception as e: 
-        await status_msg.edit(f"❌ **Failed:** {e}")
+    except Exception as e:
+        if str(e) == "LIMIT_EXCEEDED":
+            await status_msg.edit(f"⚠️ **فشل التحميل:** الحجم يتجاوز الـ {MAX_SIZE_MB} ميجابايت.")
+        else:
+            await status_msg.edit(f"❌ **Failed:** {e}")
     finally: 
         if os.path.exists(file_path): os.remove(file_path)
 
