@@ -1,10 +1,26 @@
-import os, asyncio, time, re
+import os, asyncio, time, re, threading, sys
 from pyrogram import Client, filters
 from pyrogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import UserNotParticipant
 import yt_dlp
 from http.server import BaseHTTPRequestHandler, HTTPServer
-import threading
+
+# --- منع تكرار النسخ (Anti-Double Instance) ---
+LOCK_FILE = "bot.lock"
+
+def check_single_instance():
+    """تمنع تشغيل أكثر من نسخة للبوت في نفس الوقت على ريندر"""
+    if os.path.exists(LOCK_FILE):
+        try:
+            os.remove(LOCK_FILE)
+        except Exception:
+            print("⚠️ هناك نسخة تعمل بالفعل.. سيتم إغلاق هذه النسخة لتجنب التكرار.")
+            sys.exit(1)
+    with open(LOCK_FILE, "w") as f:
+        f.write(str(os.getpid()))
+
+# تشغيل الفحص فوراً عند تشغيل الملف
+check_single_instance()
 
 # --- سيرفر وهمي لإرضاء ريندر (Port Binding) ---
 def run_health_check_server():
@@ -16,10 +32,11 @@ def run_health_check_server():
     
     port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(('0.0.0.0', port), Handler)
+    print(f"📡 Health Check Server started on port {port}")
     server.serve_forever()
 
 # --- Config | الإعدادات ---
-API_ID = 33536164
+API_ID = 35909466
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
 BOT_TOKEN = "8254937829:AAE2ayqwQJlxix9VC70sWvj2Ss5nSOxgId0"
 ADMIN_ID = 7349033289 
@@ -27,7 +44,7 @@ DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
 CHANNEL_USER = "Fast_Mediia" 
 USERS_FILE = "users_database.txt" 
-MAX_SIZE_MB = 450  # الحد الأقصى للملف بالميجابايت
+MAX_SIZE_MB = 450 
 
 # --- Engine Section | قسم المحرك ---
 def prepare_engine():
@@ -51,16 +68,14 @@ def get_all_formats(url):
         all_formats = info.get('formats', [])
         
         for f in all_formats:
-            # التحقق من وجود فيديو وصوت معاً في الصيغة
             if f.get('vcodec') != 'none' and f.get('acodec') != 'none':
                 res = f.get('height')
                 size = f.get('filesize') or f.get('filesize_approx')
                 
                 if res:
-                    # تحويل الحجم للميجابايت
                     size_mb = size / (1024 * 1024) if size else 0
                     if size_mb > MAX_SIZE_MB:
-                        label = f"⚠️ {res}p (Too Large)"
+                        label = f"⚠️ {res}p ({int(size_mb)}MB > Limit)"
                         fid = "too_large"
                     else:
                         label = f"🎬 {res}p" + (f" ({int(size_mb)}MB)" if size_mb > 0 else "")
@@ -77,8 +92,6 @@ def get_all_formats(url):
             
         sorted_labels = sorted(formats_btns.keys(), key=extract_res, reverse=True)
         final_formats = {label: formats_btns[label] for label in sorted_labels}
-        
-        # إضافة خيار الصوت دائماً (عادة يكون أصغر من 450 ميجا)
         final_formats["🎶 Audio | تحميل صوت"] = "bestaudio[ext=m4a]/bestaudio"
         return final_formats
 
@@ -95,7 +108,7 @@ def run_download(url, format_id, file_path):
         ydl.download([url])
 
 # --- Bot Section | قسم البوت ---
-app = Client("fast_media_v80", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("fast_media_v200", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
 def add_user(user_id):
@@ -180,8 +193,8 @@ async def handle_text(client, message):
             user_cache[user_id] = text
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
             await status.edit("✅ **Formats Found | تم الاستخراج**\nChoose your option: 👇", reply_markup=InlineKeyboardMarkup(btns))
-        except Exception as e: 
-            await status.edit(f"❌ **Error | فشل المعالجة**\nربما الرابط غير مدعوم أو خاص.")
+        except: 
+            await status.edit("❌ **Error | فشل في جلب البيانات**\nالرابط غير مدعوم أو أن الفيديو خاص.")
 
 @app.on_callback_query()
 async def download_cb(client, callback_query):
@@ -189,11 +202,11 @@ async def download_cb(client, callback_query):
     url = user_cache.get(user_id)
     
     if f_id == "too_large":
-        await callback_query.answer("⚠️ عذراً، هذا الحجم يتخطى 450 ميجابايت. يرجى اختيار جودة أقل.", show_alert=True)
+        await callback_query.answer("⚠️ عفواً، هذا الملف حجمه أكبر من 450 ميجابايت!\nلا يمكن تحميله عبر البوت.", show_alert=True)
         return
 
     if not url:
-        await callback_query.answer("⚠️ Session Expired", show_alert=True); return
+        await callback_query.answer("⚠️ انتهت الجلسة، أرسل الرابط مجدداً", show_alert=True); return
     
     status_msg = await callback_query.message.edit("⚙️ **Processing.. جاري التنفيذ**")
     is_audio = "audio" in f_id
@@ -202,11 +215,10 @@ async def download_cb(client, callback_query):
     try:
         await asyncio.to_thread(run_download, url, f_id, file_path)
         
-        # فحص حجم الملف الفعلي بعد التحميل للأمان
         if os.path.exists(file_path):
-            actual_size = os.path.getsize(file_path) / (1024 * 1024)
-            if actual_size > MAX_SIZE_MB:
-                await status_msg.edit(f"❌ **عذراً، حجم الملف ({int(actual_size)}MB) كبير جداً.**\nأقصى حجم مسموح به هو {MAX_SIZE_MB} ميجابايت.")
+            actual_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+            if actual_size_mb > MAX_SIZE_MB:
+                await status_msg.edit(f"❌ **عفواً، الحجم الفعلي للملف ({int(actual_size_mb)}MB) تجاوز الحد المسموح.**")
                 os.remove(file_path)
                 return
 
@@ -216,6 +228,7 @@ async def download_cb(client, callback_query):
             else: 
                 await client.send_video(user_id, file_path, caption=f"🎬 **Video by {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st))
             
+            # --- رسالة الانتهاء والشكر ---
             thanks_text = (
                 f"✨ **Mission Completed | تمت المهمة** ✨\n"
                 f"━━━━━━━━━━━━━━━━━━\n"
@@ -229,10 +242,13 @@ async def download_cb(client, callback_query):
             await client.send_message(user_id, thanks_text)
             await status_msg.delete()
     except Exception as e: 
-        await status_msg.edit(f"❌ **Failed:** {e}")
+        await status_msg.edit(f"❌ **Failed:** {str(e)[:100]}")
     finally: 
         if os.path.exists(file_path): os.remove(file_path)
 
 if __name__ == "__main__":
-    threading.Thread(target=run_health_check_server, daemon=True).start()
+    # تشغيل سيرفر الصحة في الخلفية بعد تأخير بسيط لضمان استقرار البوت
+    threading.Timer(5, lambda: threading.Thread(target=run_health_check_server, daemon=True).start()).start()
+    
+    print("🚀 Bot is starting now...")
     app.run()
