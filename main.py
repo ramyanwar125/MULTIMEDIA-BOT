@@ -9,14 +9,9 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 LOCK_FILE = "bot.lock"
 def check_single_instance():
     if os.path.exists(LOCK_FILE):
-        try:
-            os.remove(LOCK_FILE)
-        except Exception:
-            print("⚠️ نسخة أخرى تعمل بالفعل.. إغلاق النسخة الحالية.")
-            sys.exit(1)
-    with open(LOCK_FILE, "w") as f:
-        f.write(str(os.getpid()))
-
+        try: os.remove(LOCK_FILE)
+        except: sys.exit(1)
+    with open(LOCK_FILE, "w") as f: f.write(str(os.getpid()))
 check_single_instance()
 
 # --- 2. سيرفر الصحة لريندر ---
@@ -40,8 +35,9 @@ BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
 CHANNEL_USER = "Fast_Mediia" # اسم القناة بدون @
 USERS_FILE = "users_database.txt" 
 MAX_SIZE_MB = 450 
+COOKIES_FILE = "cookies.txt" # تأكد من رفع هذا الملف
 
-app = Client("fast_media_v199", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("fast_media_v999", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
 # --- 4. وظائف الاشتراك الإجباري والقاعدة ---
@@ -49,16 +45,15 @@ async def check_subscribe(client, message):
     if not CHANNEL_USER: return True
     try:
         user = await client.get_chat_member(CHANNEL_USER, message.from_user.id)
-        if user.status == "kicked": return False
         return True
     except UserNotParticipant:
         btn = InlineKeyboardMarkup([
             [InlineKeyboardButton("📢 اشترك في القناة", url=f"https://t.me/{CHANNEL_USER}")],
             [InlineKeyboardButton("✅ تم الاشتراك", callback_data="check_sub")]
         ])
-        await message.reply(f"⚠️ **عذراً! يجب عليك الاشتراك في القناة أولاً.**\n\n🔹 @{CHANNEL_USER}", reply_markup=btn)
+        await message.reply(f"⚠️ **عذراً! يجب عليك الاشتراك في القناة أولاً لتتمكن من استخدام البوت.**\n\n🔹 @{CHANNEL_USER}", reply_markup=btn)
         return False
-    except Exception: return True # في حال وجود خلل في صلاحيات البوت بالقناة
+    except Exception: return True
 
 def add_user(user_id):
     if not os.path.exists(USERS_FILE): open(USERS_FILE, "w").close()
@@ -66,9 +61,14 @@ def add_user(user_id):
     if str(user_id) not in users:
         with open(USERS_FILE, "a") as f: f.write(f"{user_id}\n")
 
-# --- 5. محرك التحميل ---
+# --- 5. محرك التحميل مع الكوكيز ---
 def get_all_formats(url):
-    ydl_opts = {'quiet': True, 'nocheckcertificate': True}
+    ydl_opts = {
+        'quiet': True, 
+        'nocheckcertificate': True,
+        'cookiefile': COOKIES_FILE if os.path.exists(COOKIES_FILE) else None,
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+    }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=False)
         formats_btns = {}
@@ -95,11 +95,10 @@ async def progress_bar(current, total, status_msg, start_time):
     percentage = current * 100 / total
     speed = current / (now - start_time)
     bar = "▬" * int(percentage // 10) + "▭" * (10 - int(percentage // 10))
-    try:
-        await status_msg.edit(f"🚀 **Transferring..**\n`{bar}` **{percentage:.1f}%**\n⚡️ `{speed/(1024*1024):.2f} MB/s`")
+    try: await status_msg.edit(f"🚀 **Transferring..**\n`{bar}` **{percentage:.1f}%**\n⚡️ `{speed/(1024*1024):.2f} MB/s`")
     except: pass
 
-# --- 6. معالجة الرسائل ---
+# --- 6. معالجة الرسائل (الترحيب والإنهاء موجودة هنا) ---
 @app.on_message(filters.command("start") & filters.private)
 async def start(client, message):
     if not await check_subscribe(client, message): return
@@ -108,8 +107,13 @@ async def start(client, message):
     if message.from_user.id == ADMIN_ID: kb.append(['📣 Broadcast | إذاعة'])
     
     welcome_text = (
-        f"✨━━━━━━━━━━━━━✨\n  🙋‍♂️ Welcome | **{message.from_user.first_name}**\n"
-        f"  🌟 In **{BOT_NAME}**\n✨━━━━━━━━━━━━━✨\n\n👇 **أرسل الرابط الآن!**"
+        f"✨━━━━━━━━━━━━━✨\n"
+        f"  🙋‍♂️ Welcome | أهلاً بك يا **{message.from_user.first_name}**\n"
+        f"  🌟 In **{BOT_NAME}** World\n"
+        f"✨━━━━━━━━━━━━━✨\n\n"
+        f"🚀 **بوت تحميل سريع من:**\n"
+        f"📹 YouTube | 📸 Instagram | 🎵 TikTok\n\n"
+        f"👇 **أرسل الرابط الآن!**"
     )
     await message.reply(welcome_text, reply_markup=ReplyKeyboardMarkup(kb, resize_keyboard=True))
 
@@ -119,55 +123,58 @@ async def handle_text(client, message):
     text, user_id = message.text, message.from_user.id
     
     if text == '👨‍💻 Developer | المطور':
-        await message.reply(f"👑 **Dev:** {DEV_USER}\n📢 **Channel:** @{CHANNEL_USER}")
+        await message.reply(f"👑 **Main Developer:** {DEV_USER}\n📢 **Channel:** @{CHANNEL_USER}")
         return
 
     if "http" in text:
-        status = await message.reply("🔍 **Analyzing.. جاري المعالجة**")
+        status = await message.reply("🔍 **Analyzing.. جاري المعالجة** ⏳")
         try:
             formats = await asyncio.to_thread(get_all_formats, text)
             user_cache[user_id] = text
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
-            await status.edit("✅ **Formats Found:**", reply_markup=InlineKeyboardMarkup(btns))
-        except: await status.edit("❌ فشل التحليل، الرابط غير مدعوم.")
+            await status.edit("✅ **تم استخراج الجودات بنجاح:**\nاختر الجودة المطلوبة للتحميل: 👇", reply_markup=InlineKeyboardMarkup(btns))
+        except Exception as e: await status.edit(f"❌ **حدث خطأ:**\nتأكد من الرابط أو الكوكيز.")
 
 @app.on_callback_query()
 async def callbacks(client, callback_query):
-    data = callback_query.data
-    user_id = callback_query.from_user.id
-
+    data, user_id = callback_query.data, callback_query.from_user.id
     if data == "check_sub":
         if await check_subscribe(client, callback_query.message):
-            await callback_query.message.edit("✅ تم التحقق! أرسل الرابط الآن.")
-        else:
-            await callback_query.answer("⚠️ لم تشترك بعد!", show_alert=True)
+            await callback_query.message.edit("✅ تم التحقق! يمكنك الآن إرسال الرابط.")
+        else: await callback_query.answer("⚠️ لم تشترك بعد!", show_alert=True)
         return
 
     url = user_cache.get(user_id)
-    if not url: return
-    if data == "too_large":
-        await callback_query.answer("⚠️ الحجم كبير جداً (أقصى حد 450MB)", show_alert=True); return
+    if not url or data == "too_large":
+        await callback_query.answer("⚠️ غير متاح أو الحجم كبير جداً!", show_alert=True); return
     
-    status_msg = await callback_query.message.edit("⚙️ **Processing..**")
+    status_msg = await callback_query.message.edit("⚙️ **جاري التحميل والمعالجة...**")
     file_path = f"media_{user_id}.{'m4a' if 'audio' in data else 'mp4'}"
     
     try:
-        await asyncio.to_thread(lambda: yt_dlp.YoutubeDL({'outtmpl': file_path, 'format': data, 'quiet': True}).download([url]))
+        ydl_opts = {'outtmpl': file_path, 'format': data, 'quiet': True, 'cookiefile': COOKIES_FILE if os.path.exists(COOKIES_FILE) else None}
+        await asyncio.to_thread(lambda: yt_dlp.YoutubeDL(ydl_opts).download([url]))
+        
         if os.path.exists(file_path):
-            if os.path.getsize(file_path)/(1024*1024) > MAX_SIZE_MB:
-                await status_msg.edit("❌ الملف تجاوز الحجم المسموح."); os.remove(file_path); return
-            
             st = time.time()
             if "audio" in data:
                 await client.send_audio(user_id, file_path, caption=f"🎵 **By {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st))
             else:
                 await client.send_video(user_id, file_path, caption=f"🎬 **By {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st))
             
-            # رسالة الشكر
-            thanks = f"✨ **تمت المهمة بنجاح** ✨\n━━━━━━━━━\n👨‍💻 **Dev:** {DEV_USER}\n📢 **Channel:** @{CHANNEL_USER}"
-            await client.send_message(user_id, thanks)
+            # --- رسالة الانتهاء والشكر ---
+            thanks_text = (
+                f"✨ **Mission Completed | تمت المهمة** ✨\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"🤖 **Bot:** {BOT_NAME}\n"
+                f"👨‍💻 **Dev:** {DEV_USER}\n\n"
+                f"🌟 **شكراً لاستخدامك خدمتنا!**\n"
+                f"📢 **Channel:** @{CHANNEL_USER}\n"
+                f"━━━━━━━━━━━━━━━━━━"
+            )
+            await client.send_message(user_id, thanks_text)
             await status_msg.delete()
-    except Exception as e: await status_msg.edit(f"❌ خطأ: {str(e)[:50]}")
+    except Exception as e: await status_msg.edit(f"❌ خطأ أثناء التحميل.")
     finally:
         if os.path.exists(file_path): os.remove(file_path)
 
