@@ -1,7 +1,4 @@
-import os  # أضفنا هذا الاستيراد المفقود
-import asyncio
-import time
-import re
+import os, asyncio, time, re
 from pyrogram import Client, filters
 from pyrogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton
 from pyrogram.errors import UserNotParticipant
@@ -22,7 +19,7 @@ def run_health_check_server():
     server.serve_forever()
 
 # --- Config | الإعدادات ---
-API_ID = 35909466
+API_ID = 33536164
 API_HASH = "c4f81cfa1dc011bcf66c6a4a58560fd2"
 BOT_TOKEN = "8254937829:AAE2ayqwQJlxix9VC70sWvj2Ss5nSOxgId0"
 ADMIN_ID = 7349033289 
@@ -30,6 +27,7 @@ DEV_USER = "@TOP_1UP"
 BOT_NAME = "『 ＦＡＳＴ ＭＥＤＩＡ 』"
 CHANNEL_USER = "Fast_Mediia" 
 USERS_FILE = "users_database.txt" 
+MAX_SIZE_MB = 450  # الحد الأقصى للملف بالميجابايت
 
 # --- Engine Section | قسم المحرك ---
 def prepare_engine():
@@ -51,19 +49,36 @@ def get_all_formats(url):
         info = ydl.extract_info(url, download=False)
         formats_btns = {}
         all_formats = info.get('formats', [])
+        
         for f in all_formats:
+            # التحقق من وجود فيديو وصوت معاً في الصيغة
             if f.get('vcodec') != 'none' and f.get('acodec') != 'none':
                 res = f.get('height')
+                size = f.get('filesize') or f.get('filesize_approx')
+                
                 if res:
-                    label = f"🎬 {res}p"
-                    formats_btns[label] = f.get('format_id')
+                    # تحويل الحجم للميجابايت
+                    size_mb = size / (1024 * 1024) if size else 0
+                    if size_mb > MAX_SIZE_MB:
+                        label = f"⚠️ {res}p (Too Large)"
+                        fid = "too_large"
+                    else:
+                        label = f"🎬 {res}p" + (f" ({int(size_mb)}MB)" if size_mb > 0 else "")
+                        fid = f.get('format_id')
+                    
+                    formats_btns[label] = fid
+                    
         if not formats_btns:
             formats_btns["🎬 Best Quality | أفضل جودة"] = "best"
+            
         def extract_res(label):
             nums = re.findall(r'\d+', label)
             return int(nums[0]) if nums else 0
+            
         sorted_labels = sorted(formats_btns.keys(), key=extract_res, reverse=True)
         final_formats = {label: formats_btns[label] for label in sorted_labels}
+        
+        # إضافة خيار الصوت دائماً (عادة يكون أصغر من 450 ميجا)
         final_formats["🎶 Audio | تحميل صوت"] = "bestaudio[ext=m4a]/bestaudio"
         return final_formats
 
@@ -80,7 +95,7 @@ def run_download(url, format_id, file_path):
         ydl.download([url])
 
 # --- Bot Section | قسم البوت ---
-app = Client("fast_media_v88", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
+app = Client("fast_media_v80", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 user_cache = {}
 
 def add_user(user_id):
@@ -113,13 +128,7 @@ async def progress_bar(current, total, status_msg, start_time):
 @app.on_message(filters.command("start") & filters.private)
 async def start(client, message):
     add_user(message.from_user.id)
-    # --- تصحيح الأقواس هنا ---
-    kb = [
-        ['🔄 Restart Service | بدء الخدمة'],
-        ['👨‍💻 Developer | المطور']
-    ]
-    
-    # إضافة زر الإذاعة للمطور فقط
+    kb = [['🔄 Restart Service | بدء الخدمة'], ['👨‍💻 Developer | المطور']]
     if message.from_user.id == ADMIN_ID:
         kb.append(['📣 Broadcast | إذاعة'])
     
@@ -156,14 +165,11 @@ async def handle_text(client, message):
         return
 
     if user_cache.get(f"bc_{user_id}"):
-        if not os.path.exists(USERS_FILE):
-             await message.reply("❌ **No users found | لا يوجد مستخدمين**")
-        else:
-            users = open(USERS_FILE).read().splitlines()
-            for u in users:
-                try: await message.copy(int(u))
-                except: pass
-            await message.reply("✅ **Broadcast Sent | تمت الإذاعة**")
+        users = open(USERS_FILE).read().splitlines()
+        for u in users:
+            try: await message.copy(int(u))
+            except: pass
+        await message.reply("✅ **Broadcast Sent | تمت الإذاعة**")
         user_cache[f"bc_{user_id}"] = False
         return
 
@@ -174,12 +180,18 @@ async def handle_text(client, message):
             user_cache[user_id] = text
             btns = [[InlineKeyboardButton(res, callback_data=fid)] for res, fid in formats.items()]
             await status.edit("✅ **Formats Found | تم الاستخراج**\nChoose your option: 👇", reply_markup=InlineKeyboardMarkup(btns))
-        except: await status.edit("❌ **Error | فشل المعالجة**")
+        except Exception as e: 
+            await status.edit(f"❌ **Error | فشل المعالجة**\nربما الرابط غير مدعوم أو خاص.")
 
 @app.on_callback_query()
 async def download_cb(client, callback_query):
     f_id, user_id = callback_query.data, callback_query.from_user.id
     url = user_cache.get(user_id)
+    
+    if f_id == "too_large":
+        await callback_query.answer("⚠️ عذراً، هذا الحجم يتخطى 450 ميجابايت. يرجى اختيار جودة أقل.", show_alert=True)
+        return
+
     if not url:
         await callback_query.answer("⚠️ Session Expired", show_alert=True); return
     
@@ -189,7 +201,15 @@ async def download_cb(client, callback_query):
     
     try:
         await asyncio.to_thread(run_download, url, f_id, file_path)
+        
+        # فحص حجم الملف الفعلي بعد التحميل للأمان
         if os.path.exists(file_path):
+            actual_size = os.path.getsize(file_path) / (1024 * 1024)
+            if actual_size > MAX_SIZE_MB:
+                await status_msg.edit(f"❌ **عذراً، حجم الملف ({int(actual_size)}MB) كبير جداً.**\nأقصى حجم مسموح به هو {MAX_SIZE_MB} ميجابايت.")
+                os.remove(file_path)
+                return
+
             st = time.time()
             if is_audio: 
                 await client.send_audio(user_id, file_path, caption=f"🎵 **Audio by {BOT_NAME}**", progress=progress_bar, progress_args=(status_msg, st))
